@@ -1,0 +1,13 @@
+{% load hq_shared_tags %}
+
+{% url payments_mach_backend as backend_mach_url %}
+{#{% url payments_manage_backend 'tropo' as backend_tropo_url %}#}
+{#{% url payments_manage_backend 'unicel' as backend_unicel_url %}#}
+<nav>
+    <ul class="nav nav-list" id="report-list">
+        <li class="nav-header">Manage SMS Backend Rates</li>
+        <li{% is_url_active request backend_mach_url %}><a href="{{ backend_mach_url }}">Mach</a></li>
+{#        <li{% is_url_active request backend_tropo_url %}><a href="{{ backend_tropo_url }}">Tropo</a></li>#}
+{#        <li{% is_url_active request backend_unicel_url %}><a href="{{ backend_unicel_url }}">Unicel</a></li>#}
+    </ul>
+</nav>

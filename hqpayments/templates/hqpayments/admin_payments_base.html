@@ -1,0 +1,31 @@
+{% extends "hqwebapp/two_column.html" %}
+{% load hq_shared_tags %}
+
+{% block js %} {{ block.super }}
+{% endblock %}
+
+{% block js-inline %} {{ block.super }}
+{% endblock %}
+
+{% block title %} - Administer Payments{% endblock %}
+
+{% block page-title %}
+    <ul class="breadcrumb">
+        <li>
+            <a href="{% url payments_admin_default %}"><strong>Administer Payments</strong></a> <span class="divider">&gt;</span>
+        </li>
+        {% block breadcrumbs %}
+        <li class="active">
+            <div id="report-title"><a href="#">Moo</a></div>
+        </li>
+        {% endblock %}
+    </ul>
+{% endblock %}
+
+{% block sidebar %}
+    {% include 'hqpayments/admin/partials/admin_navigation.html' %}
+{% endblock %}
+
+{% block main_column %}
+    PAAAYYYYMENTS
+{% endblock %}
