@@ -1,0 +1,33 @@
+{% extends "hqpayments/billing/reports/rate_report.html" %}
+{% load hq_bootstrap_tags %}
+{% load hq_shared_tags %}
+
+{% block extra_actions %}
+    <a href="#bulkUploadRateModal" class="btn" data-toggle="modal">Upload Rates in Bulk</a>
+{% endblock %}
+
+{% block modals %} {{ block.super }}
+    <div class="modal hide fade" id="bulkUploadRateModal">
+        <div class="modal-header">
+            <a class="close" data-dismiss="modal">&times;</a>
+            <h3>Upload MACH Rates in Bulk</h3>
+        </div>
+        <form class="form form-horizontal" action="" method="post" enctype="multipart/form-data">
+            <div class="modal-body">
+                <fieldset>
+                    <legend>Upload rates in bulk</legend>
+                    <ol style="padding-top:1em;">
+                        <li>Download the <a href="{% static 'hqpayments/files/mach-rate-example.xlsx' %}" class="btn">example file</a></li>
+                        <li>Add the appropriate rows.</li>
+                        <li>Upload the file below.</li>
+                    </ol>
+                    {% bootstrap_fieldset mach_bulk_upload_form %}
+                </fieldset>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">Upload Bulk Rates</button>
+                <button class="btn" data-dismiss="modal">Close</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}

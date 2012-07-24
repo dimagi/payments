@@ -1,0 +1,61 @@
+{% extends "reports/async/tabular.html" %}
+{% load hq_shared_tags %}
+
+{% block js %} {{ block.super }}
+<script type="text/javascript" src="{% static 'hqpayments/js/rate_report.js' %}"></script>
+{% endblock %}
+
+{% block js-inline %} {{ block.super }}
+    <script type="text/javascript">
+        var rateUpdateManager = new HQBillingRates ({
+            newRateURL: '{% url billing_rate_form rate_form.name %}',
+            rateItemType: '{{ rate_form.item }}',
+            updateRateModal: $('#updateRateModal')
+        });
+        rateUpdateManager.init();
+    </script>
+{% endblock %}
+
+{% block reportcontent %}
+    <div class="row-fluid">
+        <div class="span8" style="padding: 1em;">
+            <a href="#addRateModal" class="btn btn-success" data-toggle="modal"><i class="icon icon-white icon-plus"></i> Add Rate</a>
+            {% block extra_actions %}{% endblock %}
+        </div>
+        <div class="span3" style="padding: 1.5em;">
+            <span class="alert alert-info">{{ rate_status_message|safe }}</span>
+        </div>
+    </div>
+    {{ block.super }}
+{% endblock %}
+
+{% block modals %} {{ block.super }}
+    <div class="modal hide fade" id="addRateModal">
+        <div class="modal-header">
+            <a class="close" data-dismiss="modal">&times;</a>
+            <h3>Create New Rate</h3>
+        </div>
+        <form class="form-horizontal" action="" method="post">
+            <div class="modal-body" style="overflow-y: visible; max-height: 500px;">
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary" data-loading-text="Submitting...">Create Rate Item</button>
+                <button class="btn" data-dismiss="modal">Close</button>
+            </div>
+        </form>
+    </div>
+    <div class="modal hide fade" id="updateRateModal">
+        <div class="modal-header">
+            <a class="close" data-dismiss="modal">&times;</a>
+            <h3>Update Rate Item</h3>
+        </div>
+        <form class="form-horizontal" action="" method="post">
+            <div class="modal-body" style="overflow-y: visible; max-height: 500px;"></div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary" data-loading-text="Updating...">Update Rate Item</button>
+                <button class="btn" data-dismiss="modal">Close</button>
+                <button class="btn btn-danger pull-left" type="submit" data-loading-text="Deleting...">Delete Rate Item</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}

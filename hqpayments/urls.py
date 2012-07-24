@@ -1,7 +1,14 @@
 from django.conf.urls.defaults import *
 
 payments_admin = patterns('hqpayments.views',
-    url(r'^$', 'admin_overview', name='payments_admin_default'),
-    #    url(r'^sms_backends/(?P<backend>[\w_]+)/$', 'manage_sms_rates', name='payments_manage_backend'),
-        url(r'^sms_backends/mach/$', 'mach_backend', name='payments_mach_backend'),
+    url(r'^delete/all/', "deltestdata"),
+    url(r'^forms/(?P<rate_form>[\w_]+)/(?P<rate_item_type>[\w_]+)/(?P<rate_id>[\w_]+)/$', 'billing_rate_form', name='billing_rate_form'),
+    url(r'^forms/(?P<rate_form>[\w_]+)/$', 'billing_rate_form', name='billing_rate_form'),
+    url(r'^async/filters/(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher', name="billing_report_async_filter_dispatcher", kwargs={
+        'async_filters': True
+    }),
+    url(r'^async/(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher', name="billing_report_async_dispatcher", kwargs={
+        'async': True
+    }),
+    url(r'^(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher', name="billing_report_dispatcher"),
 )

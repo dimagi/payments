@@ -1,0 +1,11 @@
+{% load hq_bootstrap_tags %}
+{% load hq_shared_tags %}
+<fieldset>
+    <legend>Upload rates in bulk</legend>
+    <ol style="padding-top:1em;">
+        <li>Download the <a href="{% static 'hqpayments/files/mach-rate-example.xlsx' %}" class="btn">example file</a></li>
+        <li>Add the appropriate rows.</li>
+        <li>Upload the file below.</li>
+    </ol>
+    {% bootstrap_fieldset new_rate_form %}
+</fieldset>
