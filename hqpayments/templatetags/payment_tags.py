@@ -1,7 +1,7 @@
 from django import template
 from django.core.urlresolvers import reverse
 from dimagi.utils.modules import to_function
-import settings
+from django.conf import settings
 
 register = template.Library()
 

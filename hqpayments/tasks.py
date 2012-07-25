@@ -6,7 +6,7 @@ import json
 import re
 from corehq.apps.reports.models import DailyReportNotification
 from hqpayments.models import *
-import settings
+from django.conf import settings
 
 #@periodic_task(run_every=crontab(minute=0, hour='*/6'))
 @periodic_task(run_every=crontab())

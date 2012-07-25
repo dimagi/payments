@@ -1,10 +1,12 @@
 # Stub models file
 import logging
 import re
+import urllib
 from couchdbkit.ext.django.schema import *
 import datetime
 import decimal
-import settings
+from django.conf import settings
+import urllib2
 
 DEFAULT_BASE = 1
 INCOMING = "I"
@@ -13,6 +15,7 @@ SMS_DIRECTIONS = {
     INCOMING: "Incoming",
     OUTGOING: "Outgoing"
 }
+MACH_NL_URL = "http://nls1.mach.com/ws/http?id=%(username)s&pw=%(password)s&sp=%(service_profile)s&msisdn=%(phone_number)s"
 
 class SMSBillableItem(Document):
     billable_date = DateTimeProperty()
@@ -23,37 +26,26 @@ class SMSBillableItem(Document):
 
     @classmethod
     def create_from_message(cls, message, **kwargs):
-        pass
+        if message.billing_errors:
+            logging.error("ERRORS billing SMS Message with ID %s:\n%s" % (message._id, "\n".join(message.billing_errors)))
+            message.save()
 
     @classmethod
-    def save_from_message(cls, rate_klass, message, **kwargs):
+    def save_from_message(cls, rate_item, message, **kwargs):
         billable = None
-        rate_item = None
-        if not isinstance(rate_klass, SMSBillableRate):
-            message.billing_errors.append("Billable Rate Class not provided")
+        if rate_item:
+            billable = cls()
+            billable.billable_date = datetime.datetime.utcnow()
+            billable.billable_amount = rate_item.billable_amount
+            billable.conversion_rate = rate_item.conversion_rate
+            billable.log_id = message._id
+            billable.rate_id = rate_item._id
+            billable.save()
+            message.billed = True
+            message.save()
         else:
-            rate_item = cls.get_rate_item(rate_klass, message, **kwargs)
-            if rate_item:
-                billable = cls()
-                billable.billable_date = datetime.datetime.utcnow()
-                billable.billable_amount = rate_item.billable_amount
-                billable.conversion_rate = rate_item.conversion_rate
-                billable.log_id = message._id
-                billable.rate_id = rate_item._id
-                billable.save()
-                message.billed = True
-                message.save()
-            else:
-                message.billing_errors.append("Could not bill successfully sent UNICEL message, as billing rate entry could not be found.")
-        return dict(billable=billable, rate_item=rate_item, message=message)
-
-    @classmethod
-    def get_rate_item(cls, rate_klass, message, **kwargs):
-        match_dict = kwargs.get('match_dict', dict(direction=message.direction))
-        rate_item = rate_klass.get_by_match(
-            rate_klass.generate_match_key(**match_dict)
-        )
-        return rate_item
+            message.billing_errors.append("Could not bill successfully sent UNICEL message, as billing rate entry could not be found.")
+        return dict(billable=billable, message=message)
 
 
 class UnicelSMSBillableItem(SMSBillableItem):
@@ -61,22 +53,25 @@ class UnicelSMSBillableItem(SMSBillableItem):
 
     @classmethod
     def create_from_message(cls, message, **kwargs):
-        data = kwargs.get('data', None)
-        if isinstance(data, str) and len(data) > 0:
+        response = kwargs.get('response', None)
+        rate_item = UnicelSMSBillableRate.get_by_match(
+            UnicelSMSBillableRate.generate_match_key(**dict(direction=message.direction))
+        )
+        if isinstance(response, str) and len(response) > 0:
             # attempt to figure out if there was an error in sending the message. Look for \dx\d\d\d in the returned string
             find_err = re.compile('\dx\d\d\d\s-\s')
-            match = find_err.search(data)
+            match = find_err.search(response)
             if not match:
-                result = cls.save_from_message(UnicelSMSBillableRate, message)
+                result = cls.save_from_message(rate_item, message)
                 billable = result.get('billable', None)
                 if billable:
-                    billable.message_id_from_api = data
+                    billable.message_id_from_api = response
                     billable.save()
                     return
                 else:
                     message.billing_errors.extend(result.get('message', []))
             else:
-                message.billing_errors.append("Attempted to send message via UNICEL api and received errors. Client not billed. Errors: %s" % data)
+                message.billing_errors.append("Attempted to send message via UNICEL api and received errors. Client not billed. Errors: %s" % response)
         elif message.direction == INCOMING:
             result = cls.save_from_message(UnicelSMSBillableRate, message)
             billable = result.get('billable', None)
@@ -85,18 +80,63 @@ class UnicelSMSBillableItem(SMSBillableItem):
                 billable.save()
                 return
         message.billing_errors.append("Attempt to send message via UNICEL api resulted in an error.")
-        logging.error("ERRORS billing SMS Message with ID %s:\n%s" % (message._id, "\n".join(message.billing_errors)))
-        message.save()
+
 
 
 class TropoSMSBillableItem(SMSBillableItem):
 
     @classmethod
     def create_from_message(cls, message, **kwargs):
-        cls.save_from_message(UnicelSMSBillableRate, message,
-            **dict(match_dict=dict(direction=message.direction,
-                    domain=message.domain
+        rate_item = UnicelSMSBillableRate.get_by_match(
+            UnicelSMSBillableRate.generate_match_key(**dict(direction=message.direction,
+                domain=message.domain
             )))
+        # TODO look at the response from the API and decide if billing is necessary
+        cls.save_from_message(rate_item, message)
+        super(TropoSMSBillableItem, cls).create_from_message(message, **kwargs)
+
+class MachSMSBillableItem(SMSBillableItem):
+
+    @classmethod
+    def create_from_message(cls, message, **kwargs):
+        response = kwargs.get('response', None)
+        if isinstance(response, str):
+            print response
+            number_lookup_url = MACH_NL_URL % dict(
+                username=settings.MACH_CONFIG.get('username',''),
+                password=settings.MACH_CONFIG.get('password',''),
+                service_profile=settings.MACH_CONFIG.get('service_profile', ''),
+                phone_number=urllib.quote(message.phone_number)
+            )
+            print "LOOKING UP NUMBER", number_lookup_url
+            lookup = urllib2.urlopen(number_lookup_url).read()
+            print "LOOKUP RESPONSE", lookup
+            lookup = lookup.split('|')
+            if lookup:
+                if lookup[0] == "0":
+                    country_code = lookup[9]
+                    mcc = lookup[7]
+                    mnc = lookup[8]
+                    key = [message.direction, country_code, mcc, mnc]
+                    rate_item = UnicelSMSBillableRate.view("hqpayments/mach_rates_unique",
+                        startkey=key,
+                        endkey=key+[{}],
+                        reduce=False,
+                        include_docs=True
+                    ).first()
+                    result = cls.save_from_message(rate_item, message)
+                    if result.get('billable', None):
+                        return
+                    else:
+                        message.billable_errors.extend(result.get('message', []))
+                else:
+                    message.billable_errors.append("The number lookup using Mach's API was not successful, so the client wasn't billed")
+            else:
+                message.billing_errors.append("There was an error looking up the number from Mach's api.")
+        else:
+            message.billing_errors.append("There was an error while trying to send an SMS to via Mach.")
+        super(MachSMSBillableItem, cls).create_from_message(message, **kwargs)
+
 
 
 class CurrencyConversionRate(Document):
@@ -165,9 +205,8 @@ class SMSBillableRate(Document):
         row.append('<a href="#updateRateModal" class="btn" onclick="rateUpdateManager.updateRate(this)" data-rateid="%s" data-toggle="modal">Edit</a>' % self._id)
         return row
 
-    @property
     def billable_amount(self):
-        return 0.0
+        return self.base_fee + self.surcharge
 
     @property
     def conversion_rate(self):
@@ -187,8 +226,6 @@ class SMSBillableRate(Document):
             self.base_fee = self.correctly_format_rate(kwargs.get('base_fee', self.default_base_fee))
             self.surcharge = self.correctly_format_rate(kwargs.get('surcharge', self.default_surcharge))
         self.save()
-
-
 
     @classmethod
     def get_by_match(cls, match_key):
@@ -314,9 +351,6 @@ class UnicelSMSBillableRate(SMSBillableRate):
     @classmethod
     def match_view(cls):
         return "hqpayments/unicel_rates"
-
-    def billable_amount(self):
-        return self.base_fee + self.surcharge
 
 
 
