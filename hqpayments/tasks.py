@@ -38,8 +38,14 @@ def update_currency_rate():
 
 @task
 def bill_client_for_sms(klass, message, **kwargs):
+    logging.error(kwargs)
+
     try:
         klass = eval(klass)
-        klass.create_from_message(message, **kwargs)
     except Exception:
         logging.error("Failed to parse Billable Item class. %s" % klass)
+
+    try:
+        klass.create_from_message(message, **kwargs)
+    except Exception as e:
+        logging.error("Failed create billable item from message %s.\n ERROR: %s" % (message, e))

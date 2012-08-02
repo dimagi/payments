@@ -7,6 +7,7 @@ import datetime
 import decimal
 from django.conf import settings
 import urllib2
+import phonenumbers
 
 DEFAULT_BASE = 1
 INCOMING = "I"
@@ -16,6 +17,7 @@ SMS_DIRECTIONS = {
     OUTGOING: "Outgoing"
 }
 MACH_NL_URL = "http://nls1.mach.com/ws/http?id=%(username)s&pw=%(password)s&sp=%(service_profile)s&msisdn=%(phone_number)s"
+
 
 class SMSBillableItem(Document):
     billable_date = DateTimeProperty()
@@ -102,40 +104,48 @@ class MachSMSBillableItem(SMSBillableItem):
         response = kwargs.get('response', None)
         if isinstance(response, str):
             print response
-            number_lookup_url = MACH_NL_URL % dict(
-                username=settings.MACH_CONFIG.get('username',''),
-                password=settings.MACH_CONFIG.get('password',''),
-                service_profile=settings.MACH_CONFIG.get('service_profile', ''),
-                phone_number=urllib.quote(message.phone_number)
-            )
-            print "LOOKING UP NUMBER", number_lookup_url
-            lookup = urllib2.urlopen(number_lookup_url).read()
-            print "LOOKUP RESPONSE", lookup
-            lookup = lookup.split('|')
-            if lookup:
-                if lookup[0] == "0":
-                    country_code = lookup[9]
-                    mcc = lookup[7]
-                    mnc = lookup[8]
-                    key = [message.direction, country_code, mcc, mnc]
-                    rate_item = UnicelSMSBillableRate.view("hqpayments/mach_rates_unique",
-                        startkey=key,
-                        endkey=key+[{}],
-                        reduce=False,
-                        include_docs=True
-                    ).first()
-                    result = cls.save_from_message(rate_item, message)
-                    if result.get('billable', None):
-                        return
-                    else:
-                        message.billable_errors.extend(result.get('message', []))
-                else:
-                    message.billable_errors.append("The number lookup using Mach's API was not successful, so the client wasn't billed")
-            else:
-                message.billing_errors.append("There was an error looking up the number from Mach's api.")
+            print "PHONE NUBMER, MACH:", message.phone_number
+
+            parts = phonenumbers.parse(message.phone_number, None)
+#            number_lookup_url = MACH_NL_URL % dict(
+#                username=settings.MACH_CONFIG.get('username',''),
+#                password=settings.MACH_CONFIG.get('password',''),
+#                service_profile=settings.MACH_CONFIG.get('service_profile', ''),
+#                phone_number=urllib.quote(message.phone_number)
+#            )
+
+
+
+#            print "LOOKING UP NUMBER", number_lookup_url
+#            lookup = urllib2.urlopen(number_lookup_url).read()
+#            print "LOOKUP RESPONSE", lookup
+#            lookup = lookup.split('|')
+#            if lookup:
+#                if lookup[0] == "0":
+#                    country_code = lookup[9]
+#                    mcc = lookup[7]
+#                    mnc = lookup[8]
+#                    key = [message.direction, country_code, mcc, mnc]
+#                    rate_item = UnicelSMSBillableRate.view("hqpayments/mach_rates_unique",
+#                        startkey=key,
+#                        endkey=key+[{}],
+#                        reduce=False,
+#                        include_docs=True
+#                    ).first()
+#                    result = cls.save_from_message(rate_item, message)
+#                    if result.get('billable', None):
+#                        return
+#                    else:
+#                        message.billable_errors.extend(result.get('message', []))
+#                else:
+#                    message.billable_errors.append("The number lookup using Mach's API was not successful, so the client wasn't billed")
+#            else:
+#                message.billing_errors.append("There was an error looking up the number from Mach's api.")
         else:
             message.billing_errors.append("There was an error while trying to send an SMS to via Mach.")
         super(MachSMSBillableItem, cls).create_from_message(message, **kwargs)
+
+
 
 
 
@@ -162,7 +172,7 @@ class SMSBillableRate(Document):
     last_modified = DateTimeProperty()
     currency_code = StringProperty(settings.DEFAULT_CURRENCY)
     base_fee = DecimalProperty()
-    surcharge = DecimalProperty()
+    surcharge = DecimalProperty(default=0)
 
     @classmethod
     def match_view(cls):
@@ -257,7 +267,6 @@ class SMSBillableRate(Document):
         return rate
 
 
-
 class MachSMSBillableRate(SMSBillableRate):
     country_code = StringProperty()
     country = StringProperty()
@@ -319,7 +328,6 @@ class MachSMSBillableRate(SMSBillableRate):
                 kwargs.get('country_code', ''),
                 kwargs.get('mcc', ''),
                 kwargs.get('mnc', '')]
-
 
 
 class TropoSMSBillableRate(SMSBillableRate):

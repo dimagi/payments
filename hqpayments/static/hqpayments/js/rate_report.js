@@ -40,6 +40,7 @@ var HQBillingRates = function (options) {
                         dataType: 'json',
                         url: self.newRateURL+self.rateItemType+'/'+self.currentRateID+'/'+delete_param,
                         success: function (data) {
+                            console.log(data)
                             var row = $('[data-rateid="'+self.currentRateID+'"]').parent().parent()[0];
                             if (data.deleted)
                                 reportTables.datatable.fnDeleteRow(reportTables.datatable.fnGetPosition(row));
@@ -68,19 +69,28 @@ var HQBillingRates = function (options) {
     };
 
     var updateNewRateForm = function (data) {
-            console.log(self.newRateForm);
-            self.newRateForm.find('button[type="submit"]').button('reset');
-            if (data.success)
-                self.newRateModal.modal('hide');
-            self.newRateModal.find('.modal-body').html(data.form_update);
-        },
-        updateRow = function (rowElem, rowData) {
-            $('.datatable tbody tr').removeClass('active');
-            $.each($(rowElem).children(), function (ind) {
-                $(this).html(rowData[ind]);
-            });
-            $(rowElem).addClass('active');
-        };
+        console.log(data);
+
+        console.log(self.newRateForm);
+
+        reportTables.datatable.fnAddData(data.rows);
+        for (var r in data.rows) {
+            console.log(r);
+        }
+
+
+        self.newRateForm.find('button[type="submit"]').button('reset');
+        if (data.success)
+            self.newRateModal.modal('hide');
+        self.newRateModal.find('.modal-body').html(data.form_update);
+    },
+    updateRow = function (rowElem, rowData) {
+        $('.datatable tbody tr').removeClass('active');
+        $.each($(rowElem).children(), function (ind) {
+            $(this).html(rowData[ind]);
+        });
+        $(rowElem).addClass('active');
+    };
 
 
 };

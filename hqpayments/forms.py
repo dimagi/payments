@@ -12,7 +12,7 @@ DIRECTION_CHOICES = (('O', 'Outgoing',), ('I', 'Incoming',))
 class BillableItemForm(forms.Form):
     direction = forms.ChoiceField(widget=BootstrapRadioSelect, initial='O', choices=DIRECTION_CHOICES)
     base_fee = forms.DecimalField(required=True, initial=DEFAULT_BASE, label="Base Fee")
-    surcharge = forms.DecimalField(required=False, label="Surcharge")
+    surcharge = forms.DecimalField(required=False, label="Surcharge", initial=0)
 
     @property
     def billable_item_type(self):
