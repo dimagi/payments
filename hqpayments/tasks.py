@@ -5,6 +5,7 @@ import urllib2
 import json
 import re
 from corehq.apps.reports.models import DailyReportNotification
+from corehq.apps.sms.models import MessageLog
 from hqpayments.models import *
 from django.conf import settings
 
@@ -37,13 +38,19 @@ def update_currency_rate():
         rate.save()
 
 @task
-def bill_client_for_sms(klass, message, **kwargs):
+def bill_client_for_sms(klass, message_id, **kwargs):
     logging.error(kwargs)
+    try:
+        message = MessageLog.get(message_id)
+    except Exception as e:
+        logging.error("could not create message log item from message id %s. \n ERROR: %s" % (message_id, e))
+        return
 
     try:
         klass = eval(klass)
     except Exception:
         logging.error("Failed to parse Billable Item class. %s" % klass)
+        return
 
     try:
         klass.create_from_message(message, **kwargs)
