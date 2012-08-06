@@ -1,13 +1,9 @@
 import datetime
 from celery.schedules import crontab
 from celery.decorators import periodic_task, task
-import urllib2
-import json
-import re
-from corehq.apps.reports.models import DailyReportNotification
-from corehq.apps.sms.models import MessageLog
 from hqpayments.models import *
 from django.conf import settings
+from hqpayments.utils import get_mach_data, deal_with_delinquent_mach_billable
 
 #@periodic_task(run_every=crontab(minute=0, hour='*/6'))
 @periodic_task(run_every=crontab())
@@ -38,21 +34,50 @@ def update_currency_rate():
         rate.save()
 
 @task
-def bill_client_for_sms(klass, message_id, **kwargs):
-    logging.error(kwargs)
-    try:
-        message = MessageLog.get(message_id)
-    except Exception as e:
-        logging.error("could not create message log item from message id %s. \n ERROR: %s" % (message_id, e))
-        return
-
+def bill_client_for_sms(klass, message, **kwargs):
     try:
         klass = eval(klass)
     except Exception:
         logging.error("Failed to parse Billable Item class. %s" % klass)
         return
-
     try:
         klass.create_from_message(message, **kwargs)
     except Exception as e:
         logging.error("Failed create billable item from message %s.\n ERROR: %s" % (message, e))
+
+@periodic_task(run_every=crontab(minute=0, hour=0))
+def update_mach_billables():
+    mach_data = get_mach_data(days=3)
+    try:
+        rateless_billables = MachSMSBillableItem.get_rateless().all()
+        for billable in rateless_billables:
+            billable.sync_attempts.append(datetime.datetime.utcnow())
+            for data in mach_data:
+                phone_number = data[3]
+                if phone_number == billable.phone_number:
+                    mach_number = MachPhoneNumber.get_by_number(phone_number, data)
+                    rate_item = MachSMSBillableRate.get_by_number(billable.direction, mach_number)
+                    if rate_item:
+                        billable.update_rate(rate_item)
+                        billable.save()
+                    billable.update_mach_delivery_status(data)
+                    billable.save()
+                    if billable.rate_id and billable.mach_delivered_date:
+                        break
+            deal_with_delinquent_mach_billable(billable)
+
+        statusless_billables = MachSMSBillableItem.get_statusless().all()
+        for billable in statusless_billables:
+            billable.sync_attempts.append(datetime.datetime.utcnow())
+            for data in mach_data:
+                billable.update_mach_delivery_status(data)
+                billable.save()
+                if billable.mach_delivered_date:
+                    break
+            deal_with_delinquent_mach_billable(billable)
+
+    except Exception as e:
+        logging.error("There was an error updating mach billables: %s" % e)
+
+
+
