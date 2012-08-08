@@ -1,6 +1,7 @@
 import logging
 import cookielib
 import re
+import datetime
 from django.conf import settings
 import poster
 import urllib2
@@ -61,3 +62,12 @@ def deal_with_delinquent_mach_billable(billable):
         message.billing_errors.append("Could not verify Mach billable after several attempts.")
         message.save()
         billable.delete()
+
+def format_start_end_suffixes(start=None, end=None):
+    if isinstance(start, datetime.datetime):
+        start = start.isoformat()
+    if isinstance(end, datetime.datetime):
+        end = end.isoformat()
+    startkey_suffix = [start] if start else []
+    endkey_suffix = [end] if end else [{}]
+    return startkey_suffix, endkey_suffix

@@ -6,13 +6,18 @@ from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 import json
 from django.template.loader import render_to_string
 from corehq.apps.domain.decorators import login_and_domain_required, require_superuser
-from corehq.apps.reports.views import report_dispatcher
+from corehq.apps.reports.views import report_dispatcher, datespan_default
 from dimagi.utils.web import render_to_response
 from hqpayments.forms import *
 from hqpayments.models import *
 
 @require_superuser
-def billing_report_dispatcher(request, report_slug, return_json=False, report_map='BILLING_REPORT_MAP', export=False, custom=False, async=False, async_filters=False, static_only=False):
+def default_billing_report(request):
+    return HttpResponse("working on it")
+
+@require_superuser
+@datespan_default
+def billing_report_dispatcher(request, report_slug, return_json=False, report_map='BILLING_REPORT_MAP', export=False, async=False, async_filters=False, static_only=False):
     mapping = getattr(settings, report_map, None)
     if not mapping:
         return HttpResponseNotFound("Sorry, no reports have been configured yet.")
@@ -70,12 +75,16 @@ def billing_rate_form(request, rate_form, rate_item_type="", rate_id="", templat
             form_update=render_to_string(template, context),
             rows=rate_result
         )))
+#
+#def deltestdata(request):
+#    all_rates = MachSMSBillableRate.view(MachSMSBillableRate.match_view(),
+#        reduce=False,
+#        include_docs=True
+#    ).all()
+#    for rate in all_rates:
+#        rate.delete()
+#    return HttpResponse("done")
 
-def deltestdata(request):
-    all_rates = MachSMSBillableRate.view(MachSMSBillableRate.match_view(),
-        reduce=False,
-        include_docs=True
-    ).all()
-    for rate in all_rates:
-        rate.delete()
-    return HttpResponse("done")
+@require_superuser
+def bill_details(request, bill_id):
+    return HttpResponse("Working on it")

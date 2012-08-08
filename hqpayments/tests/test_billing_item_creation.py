@@ -1,17 +1,13 @@
-from datetime import datetime
-import logging
-import cookielib
-from django.conf import settings
-from django.core.handlers.wsgi import WSGIRequest
 from django.test import TestCase
-from django.test.client import Client
-import poster
-from corehq.apps.sms.models import SMSLog, MessageLog
-from corehq.apps.users.models import CouchUser, WebUser
+from corehq.apps.sms.models import SMSLog
+from corehq.apps.users.models import WebUser
 
 from corehq.apps.unicel.api import send as unicel_send, InboundParams, DATE_FORMAT, create_from_request as unicel_incoming
 from corehq.apps.tropo.api import send as tropo_send
 from corehq.apps.sms.mach_api import send as mach_send
+
+from hqpayments.models import *
+from hqpayments.tasks import bill_client_for_sms
 
 # to get this test to actually run, you must specify the following in settings.py
 #SMS_TESTING = dict(
@@ -19,8 +15,6 @@ from corehq.apps.sms.mach_api import send as mach_send
 #    tropo="+somenumber",
 #    mach="'+somenumber"
 #)
-from hqpayments.models import *
-from hqpayments.tasks import bill_client_for_sms
 
 class BillingItemTests(TestCase):
 

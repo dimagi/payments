@@ -1,12 +1,23 @@
 import datetime
-from celery.schedules import crontab
+from celery.schedules import crontab, schedule
 from celery.decorators import periodic_task, task
+from corehq.apps.domain.models import Domain
 from hqpayments.models import *
 from django.conf import settings
 from hqpayments.utils import get_mach_data, deal_with_delinquent_mach_billable
 
-#@periodic_task(run_every=crontab(minute=0, hour='*/6'))
-@periodic_task(run_every=crontab())
+class first_of_month(schedule):
+    # from http://stackoverflow.com/questions/4397530/how-do-i-schedule-a-task-with-celery-that-runs-on-1st-of-every-month
+    def is_due(self, last_run_at):
+        now = datetime.now()
+        if now.month > last_run_at.month and now.day == 1:
+            return True, 3600
+        return False, 3600
+
+    def __repr__(self):
+        return "<first of month>"
+
+@periodic_task(run_every=crontab(minute=0, hour='*/6'))
 def update_currency_rate():
     relevant_classes = [MachSMSBillableRate(), TropoSMSBillableRate(), UnicelSMSBillableRate()]
     for klass in relevant_classes:
@@ -34,12 +45,20 @@ def update_currency_rate():
         rate.save()
 
 @task
-def bill_client_for_sms(klass, message, **kwargs):
+def bill_client_for_sms(klass, message_id, **kwargs):
+    from corehq.apps.sms.models import MessageLog
+    try:
+        message = MessageLog.get(message_id)
+    except Exception as e:
+        logging.error("Failed to retrieve message log corresponding to billable: %s" % e)
+        return
+
     try:
         klass = eval(klass)
     except Exception:
         logging.error("Failed to parse Billable Item class. %s" % klass)
         return
+
     try:
         klass.create_from_message(message, **kwargs)
     except Exception as e:
@@ -80,4 +99,11 @@ def update_mach_billables():
         logging.error("There was an error updating mach billables: %s" % e)
 
 
-
+@periodic_task(run_every=first_of_month())
+def generate_monthly_bills():
+    all_domains = Domain.view("domain/domains",
+        reduce=False,
+        include_docs=True
+    ).all()
+    for domain in all_domains:
+        HQMonthlyBill.create_bill_for_domain(domain.name)

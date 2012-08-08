@@ -6,5 +6,6 @@ function (doc) {
 
         emit(["domain", doc.domain, doc.billable_date], 1);
         emit(["domain direction", doc.domain, doc.direction, doc.billable_date], 1);
+        emit(["billable", doc.domain], 1);
     }
 }

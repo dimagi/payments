@@ -40,7 +40,7 @@ class HQBillingRateReport(HQBillingReport, StandardTabularHQReport):
 
     @property
     def rate_status_message(self):
-        return "Default base rate is $1.00. Currency is in <strong>USD</strong>."
+        return "Currency is in <strong>$ USD</strong>."
 
 class MachRateReport(HQBillingRateReport):
     slug = "mach_rates"
@@ -81,7 +81,7 @@ class MachRateReport(HQBillingRateReport):
 
     @property
     def rate_status_message(self):
-        return "Default base rate is &euro;1.00. Currency is in <strong>EUR</strong>."
+        return "Currency is in <strong>&euro; EUR</strong>."
 
 class TropoRateReport(HQBillingRateReport):
     slug = "tropo_rates"
