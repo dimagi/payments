@@ -213,7 +213,6 @@ class HQMonthlyBill(Document):
             ])
         return itemized
 
-
     def _fmt_cost(self, cost):
         currency = self.currency
         return mark_safe("%s %.2f" % (currency.safe_symbol, cost/currency.safe_conversion))
