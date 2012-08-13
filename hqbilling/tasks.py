@@ -30,7 +30,6 @@ def update_currency_conversion():
     relevant_codes = [cur.get('key')[0] for cur in currencies]
     relevant_codes.extend(rate_codes)
     relevant_codes = list(set(relevant_codes))
-    print "RELEVANT CODES", relevant_codes
     for code in relevant_codes:
         currency = BillableCurrency.get_existing_or_new_by_code(code)
         currency.update_conversion_rate()

@@ -85,7 +85,6 @@ def bill_invoice(request, bill_id,
                  itemized=False,
                  template="hqbilling/reports/monthly_bill.html",
                  partial="hqbilling/partials/invoice.html"):
-    print template
     range_fmt = "%B %d, %Y"
     bill = HQMonthlyBill.get(bill_id)
     parent_link = '<a href="%s">%s<a>' % (reverse("billing_report_dispatcher", kwargs=dict(

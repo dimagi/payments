@@ -77,7 +77,6 @@ class TestMonthlyBillFewUsers(TestCase):
         logging.info("Testing few users with SMS")
         generate_monthly_bills()
         last_bill = HQMonthlyBill.get_bills(self.domain.name).first()
-        print last_bill
         if last_bill:
             self.assertEqual(self.bill_in.total_billed,
                 last_bill.incoming_sms_billed)

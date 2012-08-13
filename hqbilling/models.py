@@ -108,7 +108,6 @@ class HQMonthlyBill(Document):
         country = self.domain_object.billing_address.country
         if not country:
             country = ''
-        print "dimagiaddress", country.lower()
         if country.lower() == 'india':
             address = """<strong>Dimagi Software Innovations</strong><br />
                     D - 1/28 Vasant Vihar<br />
@@ -152,7 +151,6 @@ class HQMonthlyBill(Document):
 
     @property
     def invoice_total(self):
-        print "getting invoice total"
         return [self._fmt_cost(self.subtotal),
             "%.2f%%" % self.tax_rate,
             self._fmt_cost(self.tax_applied),
@@ -202,7 +200,6 @@ class HQMonthlyBill(Document):
     def _itemized_users(self):
         itemized = list()
         for user_id in self.active_users:
-            print user_id
             user = CommCareUser.get(user_id)
             all_submissions = get_db().view('reports/submit_history',
                 reduce=True,

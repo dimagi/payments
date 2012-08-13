@@ -22,10 +22,8 @@ var PaymentStatusManager = function (o) {
     self.bill_id = '';
 
     self.updateModalForm = function (bill_id) {
-        console.log(bill_id);
         self.bill_id = bill_id;
         var button = $('#update-'+bill_id);
-        console.log(button);
         var domain = button.data('domain'),
             status = (button.hasClass('paid')) ? 'yes' : 'no',
             billing_start = button.data('billingstart'),

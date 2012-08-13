@@ -178,4 +178,3 @@ class MachExcelFileUploadForm(forms.Form):
         for row in mach_file:
             row = dict([(key.split(' ')[0], val) for key, val in row.items()])
             rate = MachSMSRate.get_or_create_new_from_form(overwrite=overwrite, **row)
-            print rate.as_row
