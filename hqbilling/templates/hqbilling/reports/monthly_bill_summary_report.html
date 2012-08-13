@@ -1,0 +1,26 @@
+{% extends "reports/async/tabular.html" %}
+{% load hq_shared_tags %}
+
+{% block js %} {{ block.super }}
+{% endblock %}
+
+{% block js-inline %} {{ block.super }}
+{% endblock %}
+
+{% block modals %} {{ block.super }}
+    <div class="modal hide fade" id="changePaymentStatusModal">
+        <div class="modal-header">
+            <a class="close" data-dismiss="modal">&times;</a>
+            <h3>Mark Bill as <span class="status">Paid</span>?</h3>
+        </div>
+        <form class="form-horizontal" action="#" method="post">
+            <div class="modal-body">
+                Are you sure you want to mark this bill as <span class="label label-success status">paid</span>?
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-success" data-loading-text="Changing Payment Status...">Mark as Paid</button>
+                <button class="btn" data-dismiss="modal">Cancel</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}

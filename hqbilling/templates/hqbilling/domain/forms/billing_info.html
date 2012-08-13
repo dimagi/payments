@@ -1,0 +1,9 @@
+{% load hq_bootstrap_tags %}
+<form class="form form-horizontal" action="" method="post">
+    <input type="hidden" name="billing_info_form" value="true" />
+    {% bootstrap_form_errors billing_info_form %}
+    {% bootstrap_fieldset billing_info_form "Billing Address" %}
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Update Billing Information</button>
+    </div>
+</form>

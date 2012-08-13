@@ -1,0 +1,24 @@
+{% extends "hqbilling/billing_reports_base.html" %}
+{% load hq_shared_tags %}
+
+{% block page-title %}
+<ul class="breadcrumb">
+    <li>
+        <a href="{% url billing_default %}"><strong>HQ Billing</strong></a> <span class="divider">&gt;</span>
+    </li>
+    <li>
+        {{ parent_link|safe }}<span class="divider">&gt;</span>
+    </li>
+    <li class="active">
+        <a href="#">Invoice</a> <small>for Project</small>
+    </li>
+</ul>
+{% endblock %}
+
+{% block main_column %}
+Itemized Monthly Bill
+{% endblock %}
+
+{% block modals %} {{ block.super }}
+
+{% endblock %}
