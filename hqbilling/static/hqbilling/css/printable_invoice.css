@@ -1,0 +1,32 @@
+body {
+    padding: 2em;
+}
+
+body, table {
+    font-size: 7.5pt;
+}
+
+h1 {
+    font-size: 14pt;
+}
+h2 {
+    font-size: 12pt;
+}
+h2 small {
+    font-size: 10pt;
+}
+
+.well,
+.page-header,
+.table-bordered,
+.table-bordered th,
+.table-bordered td {
+    border-color: black !important;
+    border-radius: 0 !important;
+    -moz-border-radius: 0 !important;
+    -webkit-border-radius: 0 !important;
+}
+
+table tbody td {
+    background-color: transparent;
+}

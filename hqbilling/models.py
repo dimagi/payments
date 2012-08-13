@@ -12,6 +12,7 @@ import urllib2
 from django.utils.safestring import mark_safe
 import phonenumbers
 import pytz
+from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
 from dimagi.utils.timezones import utils as tz_utils
 from hqbilling.utils import get_mach_data, format_start_end_suffixes
@@ -34,20 +35,40 @@ class HQMonthlyBill(Document):
     billing_period_start = DateTimeProperty()
     billing_period_end = DateTimeProperty()
     date_generated = DateTimeProperty()
-    all_incoming_sms_billables = ListProperty()
-    all_incoming_sms_billed = DecimalProperty(default=0)
-    all_outgoing_sms_billables = ListProperty()
-    all_outgoing_sms_billed = DecimalProperty(default=0)
+    incoming_sms_billables = ListProperty()
+    incoming_sms_billed = DecimalProperty(default=0)
+    outgoing_sms_billables = ListProperty()
+    outgoing_sms_billed = DecimalProperty(default=0)
     active_users = ListProperty()
     active_users_billed = DecimalProperty(default=0)
     paid = BooleanProperty(default=False)
-    billing_currency = StringProperty() #
+
+    def __getattr__(self, key):
+        if key == 'domain_object':
+            from corehq.apps.domain.models import Domain
+            return Domain.get_by_name(self.domain)
+        if key == 'currency':
+            currency_code = self.domain_object.currency_code if hasattr(self.domain_object, 'currency_code') else None
+            if not currency_code:
+                currency_code = settings.DEFAULT_CURRENCY
+            return BillableCurrency.get_by_code(currency_code).first()
+        if key == 'tax':
+            tax_rate = TaxRateByCountry.get_by_country(self.domain_object.billing_address.country).first()
+            if not tax_rate:
+                tax_rate = TaxRateByCountry.get_default()
+            return tax_rate
+        return super(HQMonthlyBill, self).__getattr__(key)
 
     @property
     def invoice_id(self):
+        """
+            If anyone can think of a better id system than this, let me know.
+            Using the doc id would look a little 'scary' to the average user,
+            this at least has some meaningful pattern.
+        """
         parts = list()
         parts_date_fmt = "%m%d%Y"
-        parts.append(self.domain.upper()[0:2])
+        parts.append(self.domain.upper()[0:3])
         parts.append(self.billing_period_start.strftime(parts_date_fmt))
         parts.append(self.billing_period_end.strftime(parts_date_fmt))
         parts.append(self.date_generated.strftime(parts_date_fmt))
@@ -55,44 +76,150 @@ class HQMonthlyBill(Document):
 
     @property
     def subtotal(self):
-        return self.all_incoming_sms_billed + self.all_outgoing_sms_billed + self.active_users_billed
+        return self.incoming_sms_billed + self.outgoing_sms_billed + self.active_users_billed
+
+    @property
+    def subtotal_formatted(self):
+        return self._fmt_cost(self.subtotal)
+
+    @property
+    def tax_rate(self):
+        return self.tax.tax_rate
+
+    @property
+    def tax_applied(self):
+        return (self.tax_rate/100) * self.subtotal
+
+    @property
+    def total_billed(self):
+        return self.subtotal + self.tax_applied
 
     @property
     def html_billing_address(self):
-        from corehq.apps.domain.models import Domain
-        domain = Domain.get_by_name(self.domain)
-        if hasattr(domain, 'billing_address') and domain.billing_address:
-            return domain.billing_address.html_address
+        if hasattr(self.domain_object, 'billing_address') and self.domain_object.billing_address:
+            return self.domain_object.billing_address.html_address
         else:
             return mark_safe("""<address><strong>%s</strong><br />
-                        No address available. Please ask project administrator to enter one.</address>""" % domain.name)
+                        No address available. Please ask project administrator to enter one.</address>""" %
+                             self.domain)
+
+    @property
+    def html_dimagi_address(self):
+        country = self.domain_object.billing_address.country
+        if not country:
+            country = ''
+        print "dimagiaddress", country.lower()
+        if country.lower() == 'india':
+            address = """<strong>Dimagi Software Innovations</strong><br />
+                    D - 1/28 Vasant Vihar<br />
+                    New Delhi 110057<br />
+                    India<br />
+                    T +91 1146704670<br />"""
+        else:
+            address = """<strong>Dimagi, Inc.</strong><br />
+                585 Massachusetts Avenue, Suite No. 3<br />
+                Cambridge, MA 02139<br />
+                USA<br />
+                T +1 617.649.2214<br />
+                F +1 617.274.8393<br />"""
+        return mark_safe(u'<address>%s www.dimagi.com</address>' % address)
 
     @property
     def invoice_items(self):
-        invoice_items = list()
-        fmt_price = "$%.2f"
+        items = list()
         if self.active_users_billed > 0:
-            invoice_items.append(dict(
+            items.append(dict(
                 desc="CommCare HQ Hosting Fees",
-                qty="%d users" % len(self.active_users),
-                unit_price=fmt_price % ACTIVE_USER_RATE,
-                price = fmt_price % self.active_users_billed
+                qty="%s users" % len(self.active_users),
+                unit_price=self._fmt_cost(decimal.Decimal(0.75)),
+                billed=self._fmt_cost(self.active_users_billed)
             ))
-        if self.all_incoming_sms_billed > 0:
-            invoice_items.append(dict(
+        if self.incoming_sms_billed > 0:
+            items.append(dict(
                 desc="SMS Inbound",
-                qty=len(self.all_incoming_sms_billables),
+                qty=len(self.incoming_sms_billables),
                 unit_price="See Itemized",
-                price=fmt_price % self.all_incoming_sms_billed
+                billed=self._fmt_cost(self.incoming_sms_billed)
             ))
-        if self.all_outgoing_sms_billed > 0:
-            invoice_items.append(dict(
+        if self.outgoing_sms_billed > 0:
+            items.append(dict(
                 desc="SMS Outbound",
-                qty=len(self.all_outgoing_sms_billables),
+                qty=len(self.outgoing_sms_billables),
                 unit_price="See Itemized",
-                price=fmt_price % self.all_outgoing_sms_billed
+                billed=self._fmt_cost(self.outgoing_sms_billed)
             ))
-        return invoice_items
+        return items
+
+    @property
+    def invoice_total(self):
+        print "getting invoice total"
+        return [self._fmt_cost(self.subtotal),
+            "%.2f%%" % self.tax_rate,
+            self._fmt_cost(self.tax_applied),
+            mark_safe('<strong style="font-size:1.5em;">%s</strong>' % self._fmt_cost(self.total_billed))
+        ]
+
+    @property
+    def itemized_statement(self):
+        itemized = dict()
+        if self.incoming_sms_billed > 0:
+            itemized.update(dict(
+                incoming_sms=dict(
+                    messages=self._itemized_sms(INCOMING),
+                    total_text="Total for Inbound Messages",
+                    total=self._fmt_cost(self.incoming_sms_billed)
+                )
+            ))
+        if self.outgoing_sms_billed > 0:
+            itemized.update(dict(
+                outgoing_sms=dict(
+                    messages=self._itemized_sms(OUTGOING),
+                    total_text="Total for Outbound Messages",
+                    total=self._fmt_cost(self.outgoing_sms_billed)
+                )
+            ))
+        if self.active_users_billed > 0:
+            itemized.update(dict(
+                users=self._itemized_users(),
+                users_total=self._fmt_cost(self.total_billed)
+            ))
+        return itemized
+
+    def _itemized_sms(self, direction):
+        direction_name = SMS_DIRECTIONS.get(direction).lower()
+        sms_ids = getattr(self, "%s_sms_billables" % direction_name)
+        itemized = list()
+        for sms_id in sms_ids:
+            billable = SMSBillable.get(sms_id)
+            itemized.append([
+                billable.billable_date.strftime("%d %b %Y %H:%M"),
+                billable.phone_number,
+                eval(billable.doc_type).api_name(),
+                self._fmt_cost(billable.total_billed)
+            ])
+        return itemized
+
+    def _itemized_users(self):
+        itemized = list()
+        for user_id in self.active_users:
+            print user_id
+            user = CommCareUser.get(user_id)
+            all_submissions = get_db().view('reports/submit_history',
+                reduce=True,
+                startkey=[self.domain, user_id],
+                endkey=[self.domain, user_id, {}]
+            ).first()
+            all_submissions = all_submissions.get('value', 0) if all_submissions else 0
+            itemized.append([
+                user.username_in_report,
+                all_submissions
+            ])
+        return itemized
+
+
+    def _fmt_cost(self, cost):
+        currency = self.currency
+        return mark_safe("%s %.2f" % (currency.safe_symbol, cost/currency.safe_conversion))
 
     def _get_all_active_and_submitted_users(self):
         """
@@ -112,7 +239,45 @@ class HQMonthlyBill(Document):
         submitted_user_ids = [item.get('value',{}).get('user_id') for item in data]
         inactive_submitted_user_ids = list(set([user_id for user_id in submitted_user_ids
                                                 if user_id in inactive_user_ids]))
-        return active_user_ids+inactive_submitted_user_ids
+        self.active_users = active_user_ids+inactive_submitted_user_ids
+
+    def _get_sms_activities(self, direction):
+        direction_name = SMS_DIRECTIONS.get(direction).lower()
+        all_billables = SMSBillable.by_domain_and_direction(self.domain,
+            direction, start=self.billing_period_start.isoformat(),
+            end=self.billing_period_end.isoformat())
+        all_ids = [b.get_id for b in all_billables]
+        cost = sum([b.total_billed for b in all_billables])
+        setattr(self, '%s_sms_billables' % direction_name, all_ids)
+        setattr(self, '%s_sms_billed' % direction_name, cost)
+
+    def _get_default_start_end(self):
+        today = datetime.datetime.utcnow()
+        td = datetime.timedelta(days=14)
+        two_weeks = today - td
+        billing_month = two_weeks.month
+        billing_year = two_weeks.year
+        (_, last_day) = calendar.monthrange(billing_year, billing_month)
+        start_date = datetime.datetime(billing_year, billing_month, 1, 0, 0, 0, 0)
+        end_date = datetime.datetime(billing_year, billing_month, last_day, 23, 59, 59, 999999)
+        return start_date, end_date
+
+    def new_bill(self, billing_range=None):
+        start = billing_range[0] if billing_range else None
+        end = billing_range[1] if billing_range else None
+        if not (isinstance(start, datetime.datetime) and isinstance(end, datetime.datetime)):
+            start, end = self._get_default_start_end()
+
+        self.billing_period_start = start
+        self.billing_period_end = end
+        self.date_generated = datetime.datetime.utcnow()
+
+        self._get_sms_activities(INCOMING)
+        self._get_sms_activities(OUTGOING)
+
+        self._get_all_active_and_submitted_users()
+        if len(self.active_users) > 20:
+            self.active_users_billed = len(self.active_users) * ACTIVE_USER_RATE
 
     @classmethod
     def base_couch_view(cls):
@@ -137,64 +302,28 @@ class HQMonthlyBill(Document):
         )
 
     @classmethod
-    def create_bill_for_domain(cls, domain, billing_range=None):
-        # billing_range is a tuple of datetimes with the first element as the beginning of the billing period and
-        # the second element as the end
-        start = billing_range[0] if billing_range else None
-        end = billing_range[1] if billing_range else None
-        if not (isinstance(start, datetime.datetime) and isinstance(stop, datetime.datetime)):
-            start, end = cls.get_default_start_end()
+    def create_bill_for_domain(cls, domain_obj, billing_range=None):
+        bill = cls(domain=domain_obj.name)
+        bill.new_bill(billing_range)
 
-        bill = cls(domain=domain)
-        bill.domain = domain
-        bill.billing_period_start = start
-        bill.billing_period_end = end
-        bill.date_generated = datetime.datetime.utcnow()
-
-        all_incoming = SMSBillable.by_domain_and_direction(domain, INCOMING,
-                            start=start.isoformat(), end=end.isoformat())
-        all_incoming_ids, all_incoming_cost = cls.get_ids_and_cost(all_incoming)
-        bill.alL_incoming_sms_billables = all_incoming_ids
-        bill.all_incoming_sms_billed = all_incoming_cost
-
-        all_outgoing = SMSBillable.by_domain_and_direction(domain, OUTGOING,
-                            start=start.isoformat(), end=end.isoformat())
-        all_outgoing_ids, all_outgoing_cost = cls.get_ids_and_cost(all_outgoing)
-        bill.all_outgoing_sms_billables = all_outgoing_ids
-        bill.all_outgoing_sms_billed = all_outgoing_cost
-
-        active_users = bill._get_all_active_and_submitted_users()
-        bill.active_users = active_users
-        if len(active_users) > 20:
-            bill.active_users_billed = len(active_users)*ACTIVE_USER_RATE
-
-        if bill.all_incoming_sms_billed > 0 or \
-           bill.all_outgoing_sms_billed > 0 or \
+        if bill.incoming_sms_billed > 0 or \
+           bill.outgoing_sms_billed > 0 or \
            bill.active_users_billed > 0:
-            bill.save() # save only the bills with costs attached
+            # save only the bills with costs attached so that there isn't a long list
+            # of non-actionable bills at the end
+            bill.save()
         return bill
-
-    @staticmethod
-    def get_ids_and_cost(billables):
-        return [b.get_id for b in billables], sum([b.total_billed for b in billables])
-
-    @staticmethod
-    def get_default_start_end():
-        today = datetime.datetime.utcnow()
-        td = datetime.timedelta(days=14)
-        two_weeks = today - td
-        billing_month = two_weeks.month
-        billing_year = two_weeks.year
-        (_, last_day) = calendar.monthrange(billing_year, billing_month)
-        start_date = datetime.datetime(billing_year, billing_month, 1, 0, 0, 0, 0)
-        end_date = datetime.datetime(billing_year, billing_month, last_day, 23, 59, 59, 999999)
-        return start_date, end_date
 
 
 class UpdatableItemMixin(object):
     """
         This is what the item updating reports will use to display/edit an item
     """
+    def __getattr__(self, name):
+        if name == 'get_id':
+            return ""
+        raise AttributeError(name)
+
     @property
     def column_list(self):
         """
@@ -210,18 +339,18 @@ class UpdatableItemMixin(object):
         for key in keys:
             property = getattr(self, key)
             row.append(self._format_property(key, property))
-        row.append(self.update_item_button)
+        row.append('<a href="#updateRateModal" class="btn" onclick="rateUpdateManager.updateRate(this)" data-rateid="%s" data-toggle="modal">Edit</a>' % self.get_id)
         return row
 
-    @property
-    def update_item_button(self):
-        return NotImplementedError
-
     def _format_property(self, key, property):
-        if isinstance(property, decimal.Decimal):
-            property = property.quantize(decimal.Decimal(10) ** -3)
-            return "%s %s" % (self.currency_character, property)
         return property
+
+    def update_item_from_form(self, overwrite=True, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
+        raise NotImplementedError
 
     @staticmethod
     def couch_view():
@@ -230,17 +359,34 @@ class UpdatableItemMixin(object):
 
 class BillableCurrency(Document, UpdatableItemMixin):
     currency_code = StringProperty()
+    symbol = StringProperty()
     conversion = DecimalProperty()
     source = StringProperty()
     last_updated = DateTimeProperty()
 
     @property
     def column_list(self):
-        return ["currency_code", "conversion", "last_updated"]
+        return ["currency_code", "symbol", "conversion", "last_updated"]
 
     @property
-    def update_item_button(self):
-        return '<a href="#updateRateModal" class="btn" onclick="rateUpdateManager.updateRate(this)" data-rateid="%s" data-toggle="modal">Edit Currency</a>' % self._id
+    def safe_symbol(self):
+        return self.symbol if self.symbol else "$"
+
+    @property
+    def safe_conversion(self):
+        return self.conversion if self.conversion != 0 else 1
+
+    def _format_property(self, key, property):
+        if isinstance(property, datetime.datetime):
+            return property.strftime("%d %B %Y at %H:%M")
+        if key == 'conversion':
+            if settings.DEFAULT_CURRENCY != self.currency_code:
+                return "%s %s : 1 %s" % (property, settings.DEFAULT_CURRENCY, self.currency_code)
+            return "Default Currency"
+        if isinstance(property, decimal.Decimal):
+            property = property.quantize(decimal.Decimal(10) ** -4)
+            return "%s" % property
+        return super(BillableCurrency, self)._format_property(key, property)
 
     def update_conversion_rate(self):
         self.last_updated = datetime.datetime.utcnow()
@@ -266,6 +412,21 @@ class BillableCurrency(Document, UpdatableItemMixin):
             conversion_url = "ERROR: %s, %s" % (e, conversion_url)
         self.source = conversion_url
 
+    def update_item_from_form(self, overwrite=True, **kwargs):
+        symbol = kwargs.get('symbol', '')
+        currency_code = kwargs.get('currency_code', '')
+        self.currency_code = currency_code
+        self.symbol = symbol
+        self.update_conversion_rate()
+        self.save()
+
+    @classmethod
+    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
+        currency_code = kwargs.get('currency_code', '')
+        currency = cls.get_existing_or_new_by_code(currency_code)
+        currency.update_item_from_form(**kwargs)
+        return currency
+
     @classmethod
     def get_by_code(cls, currency_code, include_docs=True):
         key = [currency_code.upper()]
@@ -277,10 +438,18 @@ class BillableCurrency(Document, UpdatableItemMixin):
         )
 
     @classmethod
+    def get_all(cls, include_docs=True):
+        return cls.view(cls.couch_view(),
+            reduce=False,
+            include_docs=include_docs
+        )
+
+    @classmethod
     def get_existing_or_new_by_code(cls, currency_code):
         currency = cls.get_by_code(currency_code).first()
         if not currency:
-            currency = cls(currency_code=currency_code.upper())
+            currency_code = currency_code.upper()
+            currency = cls(currency_code=currency_code)
             currency.save()
         return currency
 
@@ -300,31 +469,12 @@ class TaxRateByCountry(Document, UpdatableItemMixin):
     def column_list(self):
         return ["country", "tax_rate"]
 
-    @property
-    def update_item_button(self):
-        return '<a href="#updateRateModal" class="btn" onclick="rateUpdateManager.updateRate(this)" data-rateid="%s" data-toggle="modal">Edit</a>' % self._id
-
     def _format_property(self, key, property):
         if key == "tax_rate":
             return "%.2f%%" % property
         if key == "country":
             return property if property else "Applies to All Countries"
         return super(TaxRateByCountry, self)._format_property(key, property)
-
-    @classmethod
-    def get_tax_info(cls, country, subtotal):
-        rate = cls.get_by_country(country).first()
-        if not rate:
-            rate = cls.get_default()
-        tax_applied = subtotal * rate.tax_rate
-        total = subtotal + tax_applied
-        fmt = "$%.2f"
-        return dict(
-            subtotal=dict(val=subtotal, html=fmt % subtotal),
-            percent=dict(val=rate.tax_rate, html="%.2f%%" % rate.tax_rate),
-            applied=dict(val=tax_applied, html=fmt % tax_applied),
-            total=dict(val=total, html=fmt % total)
-        )
 
     @classmethod
     def get_by_country(cls, country, include_docs=True):
@@ -335,17 +485,20 @@ class TaxRateByCountry(Document, UpdatableItemMixin):
             endkey=[country, {}]
         )
 
-    @classmethod
-    def update_item_from_form(cls, **kwargs):
-        country = kwargs.get('country', '').lower()
+    def update_item_from_form(self, overwrite=True, **kwargs):
         tax_rate = kwargs.get('tax_rate', 0)
-        rate = cls.get_by_country(country).first()
-        if not rate:
-            rate = cls()
-            rate.country = country
-        rate.tax_rate = tax_rate
-        rate.save()
-        return rate
+        self.tax_rate = tax_rate
+        self.save()
+
+    @classmethod
+    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
+        country = kwargs.get('country', '')
+        tax = cls.get_by_country(country).first()
+        if not tax:
+            tax = cls(country=country)
+            tax.save()
+        tax.update_item_from_form(**kwargs)
+        return tax
 
     @classmethod
     def get_default(cls, include_docs=True):
@@ -371,10 +524,6 @@ class SMSRate(Document, UpdatableItemMixin):
         return ["direction", "base_fee"]
 
     @property
-    def update_item_button(self):
-        return '<a href="#updateRateModal" class="btn" onclick="rateUpdateManager.updateRate(this)" data-rateid="%s" data-toggle="modal">Edit</a>' % self._id
-
-    @property
     def default_base_fee(self):
         return DEFAULT_BASE
 
@@ -386,7 +535,7 @@ class SMSRate(Document, UpdatableItemMixin):
     def conversion_rate(self):
         rate = 0.0
         try:
-            r = BillableCurrency.get_by_code(self.currency_code)
+            r = BillableCurrency.get_by_code(self.currency_code).first()
             rate = r.conversion
         except Exception as e:
             logging.error("Could not get conversion rate. Error: %s" % e)
@@ -419,7 +568,7 @@ class SMSRate(Document, UpdatableItemMixin):
         return rate
 
     @classmethod
-    def update_item_from_form_by_match(cls, overwrite=True, **kwargs):
+    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
         rate = cls.get_by_match(cls.generate_match_key(**kwargs))
         if not rate:
             rate = cls()
@@ -492,11 +641,11 @@ class MachSMSRate(SMSRate):
         super(MachSMSRate, self).update_item_from_form(overwrite, **kwargs)
 
     @classmethod
-    def update_item_from_form_by_match(cls, overwrite=True, **kwargs):
+    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
         kwargs['country_code'] = cls.correctly_format_code(kwargs.get('country_code', ''))
         kwargs['mcc'] = cls.correctly_format_code(kwargs.get('mcc', ''))
         kwargs['mnc'] = cls.correctly_format_code(kwargs.get('mnc', ''))
-        return super(MachSMSRate, cls).update_item_from_form_by_match(overwrite, **kwargs)
+        return super(MachSMSRate, cls).get_or_create_new_from_form(overwrite, **kwargs)
 
     @staticmethod
     def currency_code_setting():
@@ -654,10 +803,6 @@ class SMSBillable(Document):
     phone_number = StringProperty()
 
     @property
-    def api_name(self):
-        return "All"
-
-    @property
     def converted_billable_amount(self):
         return self.billable_amount * self.conversion_rate
 
@@ -739,16 +884,16 @@ class SMSBillable(Document):
             message.billing_errors.append("Billing rate entry could not be found.")
         return dict(billable=billable, message=message)
 
+    @staticmethod
+    def api_name():
+        return "All"
+
 
 class UnicelSMSBillable(SMSBillable):
     """
         Generated when an SMS is sent or received via Unicel's API.
     """
     unicel_id = StringProperty()
-
-    @property
-    def api_name(self):
-        return "Unicel"
 
     @classmethod
     def couch_view(cls):
@@ -789,16 +934,16 @@ class UnicelSMSBillable(SMSBillable):
             message.billing_errors.append("Attempt to send message via UNICEL api resulted in an error.")
         super(UnicelSMSBillable, cls).handle_api_response(message, **kwargs)
 
+    @staticmethod
+    def api_name():
+        return "Unicel"
+
 
 class TropoSMSBillable(SMSBillable):
     """
         Generated when an SMS is sent via Tropo's API.
     """
     tropo_id = StringProperty()
-
-    @property
-    def api_name(self):
-        return "Tropo"
 
     @classmethod
     def couch_view(cls):
@@ -835,6 +980,10 @@ class TropoSMSBillable(SMSBillable):
             return match.group()[4:]
         return None
 
+    @staticmethod
+    def api_name():
+        return "Tropo"
+
 
 class MachSMSBillable(SMSBillable):
     """
@@ -845,10 +994,6 @@ class MachSMSBillable(SMSBillable):
     mach_delivery_status = StringProperty()
     mach_id = StringProperty()
     mach_delivered_date = DateTimeProperty()
-
-    @property
-    def api_name(self):
-        return "Mach"
 
     def save_message_info(self, message):
         self.sync_attempts.append(datetime.datetime.utcnow())
@@ -938,4 +1083,6 @@ class MachSMSBillable(SMSBillable):
             message.billing_errors.append("There was an error while trying to send an SMS to via Mach.")
         super(MachSMSBillable, cls).handle_api_response(message, **kwargs)
 
-
+    @staticmethod
+    def api_name():
+        return "Mach"

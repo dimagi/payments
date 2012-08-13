@@ -1,0 +1,13 @@
+{% load hq_shared_tags %}
+
+<html lang="en">
+    <head>
+        <title>CommCare HQ Billing</title>
+        <link rel="stylesheet" media="all" href="{% static 'hq_bootstrap/css/hq-bootstrap.css' %}"/>
+        <link rel="stylesheet" media="print" href="{% static 'hqbilling/css/printable_invoice.css' %}"/>
+    </head>
+    <body>
+        <h1 class="pull-left" style="margin-bottom:1em;"><img alt="Dimagi" src="{% static 'hqbilling/img/invoice_logo.jpg' %}" /></h1>
+        {% include partial %}
+    </body>
+</html>

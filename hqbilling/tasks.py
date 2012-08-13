@@ -88,4 +88,4 @@ def update_mach_billables():
 def generate_monthly_bills():
     from corehq.apps.domain.models import Domain
     for domain in Domain.get_all():
-        HQMonthlyBill.create_bill_for_domain(domain.name)
+        HQMonthlyBill.create_bill_for_domain(domain)

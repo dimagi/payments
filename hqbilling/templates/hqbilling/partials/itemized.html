@@ -1,0 +1,69 @@
+<section id="itemized_content">
+    <div class="page-header">
+        <h1 style="clear: both; ">Itemized Statement</h1>
+    </div>
+    <dl class="dl-horizontal">
+        <dt>Project Name:</dt>
+        <dd>{{ bill.domain|capfirst }}</dd>
+        <dt>Period Start:</dt>
+        <dd>{{ bill.billing_period_start|date:'d N Y' }}</dd>
+        <dt>Period End:</dt>
+        <dd>{{ bill.billing_period_end|date:'d N Y' }}</dd>
+    </dl>
+    {% with bill.itemized_statement as itemized %}
+        {% if itemized.incoming_sms %}
+            <div class="row-fluid">
+                <div class="span12">
+                <h2>Inbound Messages</h2>
+                {% with itemized.incoming_sms as billables %}
+                    {% include 'hqbilling/partials/sms_items.html' %}
+                {% endwith %}
+                </div>
+            </div>
+        {% endif %}
+        {% if itemized.outgoing_sms %}
+            <div class="row-fluid">
+                <div class="span12">
+                <h2>Outbound Messages</h2>
+                {% with itemized.outgoing_sms as billables %}
+                    {% include 'hqbilling/partials/sms_items.html' %}
+                {% endwith %}
+                </div>
+            </div>
+        {% endif %}
+        {% if itemized.users %}
+            <div class="row-fluid">
+                <div class="span12">
+                    <h2>Hosting Fee <small>Active User List</small></h2>
+                    <table class="table table-condensed table-bordered">
+                        <thead>
+                        <tr>
+                            <th class="span2">No.</th>
+                            <th class="span7">User Name</th>
+                            <th class="span3">No. Submissions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in itemized.users %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                {% for info in user %}
+                                <td>{{ info }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td></td>
+                                <th style="text-align: right;">Hosting Fee Total</th>
+                                <th>{{ itemized.users_total }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
+    <h2 class="pull-right">Total Before Taxes: {{ bill.subtotal_formatted }}</h2>
+</section>

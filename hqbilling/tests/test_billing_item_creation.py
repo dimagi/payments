@@ -31,13 +31,13 @@ class BillingItemTests(TestCase):
         for billable in all_billables:
             billable.delete()
 
-        self.usd_rate = BillableCurrency.get_by_code("USD")
+        self.usd_rate = BillableCurrency.get_existing_or_new_by_code("USD")
         self.usd_rate.conversion = 1.000
         self.usd_rate.source = "static"
         self.usd_rate.last_updated = datetime.datetime.utcnow()
         self.usd_rate.save()
 
-        self.eur_rate = BillableCurrency.get_by_code("EUR")
+        self.eur_rate = BillableCurrency.get_existing_or_new_by_code("EUR")
         self.eur_rate.conversion = 1.800
         self.eur_rate.source = "static"
         self.eur_rate.last_updated = datetime.datetime.utcnow()
@@ -47,7 +47,7 @@ class BillingItemTests(TestCase):
         self.dimagi_surcharge.domain = self.domain
         self.dimagi_surcharge.direction = OUTGOING
         self.dimagi_surcharge.base_fee = 0.002
-        self.dimagi_surcharge.currency_code = self.dimagi_surcharge.currency_code_setting
+        self.dimagi_surcharge.currency_code = self.dimagi_surcharge.currency_code_setting()
         self.dimagi_surcharge.last_modified = datetime.datetime.utcnow()
         self.dimagi_surcharge.save()
 
@@ -55,21 +55,21 @@ class BillingItemTests(TestCase):
         self.dimagi_surcharge_I.domain = self.domain
         self.dimagi_surcharge_I.direction = INCOMING
         self.dimagi_surcharge_I.base_fee = 0.001
-        self.dimagi_surcharge_I.currency_code = self.dimagi_surcharge_I.currency_code_setting
+        self.dimagi_surcharge_I.currency_code = self.dimagi_surcharge_I.currency_code_setting()
         self.dimagi_surcharge_I.last_modified = datetime.datetime.utcnow()
         self.dimagi_surcharge_I.save()
 
         self.unicel_rate = UnicelSMSRate()
         self.unicel_rate.direction = OUTGOING
         self.unicel_rate.base_fee = 0.01
-        self.unicel_rate.currency_code = self.unicel_rate.currency_code_setting
+        self.unicel_rate.currency_code = self.unicel_rate.currency_code_setting()
         self.unicel_rate.last_modified = datetime.datetime.utcnow()
         self.unicel_rate.save()
 
         self.unicel_incoming_rate = UnicelSMSRate()
         self.unicel_incoming_rate.direction = INCOMING
         self.unicel_incoming_rate.base_fee = 0.05
-        self.unicel_incoming_rate.currency_code = self.unicel_incoming_rate.currency_code_setting
+        self.unicel_incoming_rate.currency_code = self.unicel_incoming_rate.currency_code_setting()
         self.unicel_incoming_rate.last_modified = datetime.datetime.utcnow()
         self.unicel_incoming_rate.save()
 
@@ -77,7 +77,7 @@ class BillingItemTests(TestCase):
         self.tropo_rate_any.direction = OUTGOING
         self.tropo_rate_any.base_fee = 0.02
         self.tropo_rate_any.country_code = ""
-        self.tropo_rate_any.currency_code = self.tropo_rate_any.currency_code_setting
+        self.tropo_rate_any.currency_code = self.tropo_rate_any.currency_code_setting()
         self.tropo_rate_any.last_modified = datetime.datetime.utcnow()
         self.tropo_rate_any.save()
 
@@ -85,7 +85,7 @@ class BillingItemTests(TestCase):
         self.tropo_rate_us.direction = OUTGOING
         self.tropo_rate_us.base_fee = 0.01
         self.tropo_rate_us.country_code = "1"
-        self.tropo_rate_us.currency_code = self.tropo_rate_any.currency_code_setting
+        self.tropo_rate_us.currency_code = self.tropo_rate_any.currency_code_setting()
         self.tropo_rate_us.last_modified = datetime.datetime.utcnow()
         self.tropo_rate_us.save()
 
@@ -93,7 +93,7 @@ class BillingItemTests(TestCase):
         self.mach_rate.direction = OUTGOING
         self.mach_rate.base_fee = 0.03
         self.mach_rate.network_surcharge = 0.0075
-        self.mach_rate.currency_code = self.mach_rate.currency_code_setting
+        self.mach_rate.currency_code = self.mach_rate.currency_code_setting()
         self.mach_rate.last_modified = datetime.datetime.utcnow()
         self.mach_rate.country_code = "265"
         self.mach_rate.mcc = "650"

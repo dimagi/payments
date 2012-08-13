@@ -1,0 +1,27 @@
+<table class="table table-striped table-condensed table-bordered">
+    <thead>
+    <tr>
+        <th class="span3">Date Billed</th>
+        <th class="span3">Phone Number</th>
+        <th class="span3">SMS API</th>
+        <th class="span3">Amount Billed</th>
+    </tr>
+    </thead>
+    <tbody>
+        {% for billable in billables.messages %}
+        <tr>
+            {% for item in billable %}
+                <td>{{ item }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td></td>
+            <td></td>
+            <th>{{ billables.total_text }}</th>
+            <th>{{ billables.total }}</th>
+        </tr>
+    </tfoot>
+</table>

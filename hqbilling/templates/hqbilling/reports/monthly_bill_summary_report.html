@@ -2,9 +2,13 @@
 {% load hq_shared_tags %}
 
 {% block js %} {{ block.super }}
+    <script type="text/javascript" src="{% static 'hqbilling/js/payment_status.js' %}"></script>
 {% endblock %}
 
 {% block js-inline %} {{ block.super }}
+    <script type="text/javascript">
+        var payment_status = new PaymentStatusManager({});
+    </script>
 {% endblock %}
 
 {% block modals %} {{ block.super }}
@@ -15,7 +19,8 @@
         </div>
         <form class="form-horizontal" action="#" method="post">
             <div class="modal-body">
-                Are you sure you want to mark this bill as <span class="label label-success status">paid</span>?
+                <p>You are modifying the bill for <strong><span class="domain-name"></span></strong> (<span class="billing-start"></span> to <span class="billing-end"></span>)</p>
+                <p>Are you sure you want to mark this bill as <span class="label label-success status">paid</span>?</p>
             </div>
             <div class="modal-footer">
                 <button type="submit" class="btn btn-success" data-loading-text="Changing Payment Status...">Mark as Paid</button>

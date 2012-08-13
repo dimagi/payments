@@ -3,7 +3,7 @@ from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, D
 from corehq.apps.reports.standard import StandardTabularHQReport, StandardHQReport, StandardDateHQReport
 from corehq.apps.reports import util as report_utils
 from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField
-from hqbilling.models import MachSMSBillable, TropoSMSBillable, UnicelSMSBillable, HQMonthlyBill, SMS_DIRECTIONS, TaxRateByCountry
+from hqbilling.models import MachSMSBillable, TropoSMSBillable, UnicelSMSBillable, HQMonthlyBill, SMS_DIRECTIONS, TaxRateByCountry, SMSBillable
 from hqbilling.reports import HQBillingReport
 
 def format_bill_amount(amount):
@@ -30,10 +30,10 @@ class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQRe
 
     def get_headers(self):
         return DataTablesHeader(
+            DataTablesColumn("Date", span=2),
             DataTablesColumn("Project", span=3),
             DataTablesColumn("Direction", span=2),
             DataTablesColumn("Backend API", span=2),
-            DataTablesColumn("Date", span=2),
             DataTablesColumnGroup("Charges",
                 DataTablesColumn("Backend Fee", span=1),
                 DataTablesColumn("Dimagi Fee", span=1),
@@ -43,33 +43,30 @@ class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQRe
 
     def get_rows(self):
         rows = []
-        for billable in [MachSMSBillable, TropoSMSBillable, UnicelSMSBillable]:
-            rows.extend(self.generate_billable_rows(billable))
-        self.total_row = ["","","","Total Billed:"]+["%.2f" % t for t in self.totals]
-        return rows
-
-    def generate_billable_rows(self, billable_class):
-        rows = []
         for project in self.projects:
             if self.direction:
-                billables = billable_class.by_domain_and_direction(project, self.direction,
-                                start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
+                billables = SMSBillable.by_domain_and_direction(project, self.direction,
+                    start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
             else:
-                billables = billable_class.by_domain(project,
-                                start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
+                billables = SMSBillable.by_domain(project,
+                    start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
             for billable in billables:
                 self.totals[0] += billable.converted_billable_amount
                 self.totals[1] += billable.dimagi_surcharge
                 self.totals[2] += billable.total_billed
                 rows.append([
+                    report_utils.format_datatables_data(
+                        billable.billable_date.strftime("%B %d, %Y %H:%M:%S"),
+                        billable.billable_date
+                    ),
                     project,
                     SMS_DIRECTIONS.get(billable.direction),
-                    billable.api_name,
-                    billable.billable_date,
+                    eval(billable.doc_type).api_name(),
                     format_bill_amount(billable.converted_billable_amount),
                     format_bill_amount(billable.dimagi_surcharge),
                     format_bill_amount(billable.total_billed)
                 ])
+        self.total_row = ["","","","Total Billed:"]+["%.2f" % t for t in self.totals]
         return rows
 
 
@@ -79,6 +76,7 @@ class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQ
     fields = ['hqbilling.fields.DatespanBillingStartField',
               'hqbilling.fields.SelectBilledDomainsField']
     template_name = "hqbilling/reports/monthly_bill_summary_report.html"
+    exportable = False
 
     def get_parameters(self):
         self._get_projects(self.request)
@@ -107,8 +105,8 @@ class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQ
     def get_rows(self):
         rows = []
 
-        payment_button_template = """<a href="#changePaymentStatusModal" data-billid="%(bill_id)s"
-        data-ispaid="%(payment_status)s" data-toggle="modal" class="btn %(button_class)s"
+        payment_button_template = """<a href="#changePaymentStatusModal" onclick="payment_status.updateModalForm('%(bill_id)s')"
+        id="update-%(bill_id)s" data-toggle="modal" class="btn %(button_class)s"
         data-domain="%(domain)s" data-billingstart="%(billing_start)s" data-billingend="%(billing_end)s">
     %(payment_status_text)s
 </a>"""
@@ -119,30 +117,38 @@ class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQ
                 end=self.datespan.enddate_param_utc
             ).all()
             for bill in all_bills:
+                nice_start = bill.billing_period_start.strftime("%B %d, %Y")
+                nice_end = bill.billing_period_end.strftime("%B %d, %Y")
                 rows.append([
                     project,
-                    bill.billing_period_start,
-                    bill.billing_period_end,
-                    format_bill_amount(bill.all_incoming_sms_billed),
-                    format_bill_amount(bill.all_outgoing_sms_billed),
-                    format_bill_amount(bill.all_incoming_sms_billed+bill.all_outgoing_sms_billed),
+                    report_utils.format_datatables_data(
+                        nice_start,
+                        bill.billing_period_start
+                    ),
+                    report_utils.format_datatables_data(
+                        nice_end,
+                        bill.billing_period_end
+                    ),
+                    format_bill_amount(bill.incoming_sms_billed),
+                    format_bill_amount(bill.outgoing_sms_billed),
+                    format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed),
                     len(bill.active_users),
                     bill.active_users_billed,
-                    format_bill_amount(bill.all_incoming_sms_billed+bill.all_outgoing_sms_billed+bill.active_users_billed),
+                    format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed+bill.active_users_billed),
                     report_utils.format_datatables_data(
                         text=payment_button_template % dict(
-                            bill_id=bill._id,
+                            bill_id=bill.get_id,
                             payment_status="yes" if bill.paid else "no",
                             payment_status_text="Paid" if bill.paid else "Not Paid",
-                            button_class="btn-success" if bill.paid else "btn-danger",
-                            billing_start=bill.billing_period_start,
-                            billing_end=bill.billing_period_end,
+                            button_class="btn-success paid" if bill.paid else "btn-danger",
+                            billing_start=nice_start,
+                            billing_end=nice_end,
                             domain=project
                         ),
                         sort_key=int(bill.paid)
                     ),
-                    '<a href="%s" class="btn btn-primary">View Invoice</a>' % reverse("billing_invoice", kwargs=dict(bill_id=bill._id)),
-                    '<a href="%s" class="btn"><i class="icon icon-list"></i> View Itemized</a>' % reverse("billing_itemized", kwargs=dict(bill_id=bill._id))
+                    '<a href="%s" class="btn btn-primary">View Invoice</a>' % reverse("billing_invoice", kwargs=dict(bill_id=bill.get_id)),
+                    '<a href="%s" class="btn"><i class="icon icon-list"></i> View Itemized</a>' % reverse("billing_itemized", kwargs=dict(bill_id=bill.get_id))
                 ])
 
         return rows

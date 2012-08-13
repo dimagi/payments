@@ -15,7 +15,6 @@ var HQBillingRates = function (options) {
                 dataType: 'json',
                 url: self.newRateURL,
                 success: updateNewRateForm
-
             });
 
             self.newRateForm.submit(function () {
@@ -77,7 +76,6 @@ var HQBillingRates = function (options) {
         for (var r in data.rows) {
             console.log(r);
         }
-
 
         self.newRateForm.find('button[type="submit"]').button('reset');
         if (data.success)

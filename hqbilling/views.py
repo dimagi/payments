@@ -15,7 +15,7 @@ from hqbilling.reports.details import MonthlyBillReport
 
 @require_superuser
 def default_billing_report(request):
-    return reverse("billing_report_dispatcher", kwargs=dict(report_slug=MonthlyBillReport.slug))
+    return HttpResponseRedirect(reverse("billing_report_dispatcher", kwargs=dict(report_slug=MonthlyBillReport.slug)))
 
 @require_superuser
 @datespan_default
@@ -82,20 +82,25 @@ def updatable_item_form(request, form, item_type="",
 
 @require_superuser
 def bill_invoice(request, bill_id,
-                 template="hqbilling/reports/monthly_bill_invoice.html",
+                 itemized=False,
+                 template="hqbilling/reports/monthly_bill.html",
                  partial="hqbilling/partials/invoice.html"):
+    print template
     range_fmt = "%B %d, %Y"
     bill = HQMonthlyBill.get(bill_id)
-
-    domain = Domain.get_by_name(bill.domain)
-    is_india = domain.billing_address.country.lower() == 'india'
     parent_link = '<a href="%s">%s<a>' % (reverse("billing_report_dispatcher", kwargs=dict(
         report_slug=MonthlyBillReport.slug
     )), MonthlyBillReport.name)
     billing_range = "%s to %s" % (bill.billing_period_start.strftime(range_fmt),
                                   bill.billing_period_end.strftime(range_fmt))
-    view_title = "%s Invoice for %s" % (bill.billing_period_start.strftime("%B %Y"),
+    view_title = "%s %s for %s" % (bill.billing_period_start.strftime("%B %Y"),
+                                   "Itemized Statement" if itemized else "Invoice",
                                         bill.domain)
+
+    if itemized:
+        printable_url = reverse("billing_itemized_print", kwargs=dict(bill_id=bill_id))
+    else:
+        printable_url = reverse("billing_invoice_print", kwargs=dict(bill_id=bill_id))
 
     return render_to_response(request, template, dict(
         slug=MonthlyBillReport.slug,
@@ -104,18 +109,25 @@ def bill_invoice(request, bill_id,
         bill=bill,
         view_title=view_title,
         billing_range=billing_range,
-        is_india=is_india,
-        tax=TaxRateByCountry.get_tax_info(domain.billing_address.country
-                                    if domain.billing_address else "", bill.subtotal)
+        printable_url=printable_url
     ))
 
 @require_superuser
-def bill_itemized(request, bill_id, template="hqbilling/reports/monthly_bill_itemized.html"):
-    print "BILL ID", bill_id
-
-    return render_to_response(request, template, dict(
-        slug=MonthlyBillReport.slug
-    ))
+def bill_status_update(request, bill_id, status):
+    success=False
+    try:
+        bill = HQMonthlyBill.get(bill_id)
+        if bill:
+            bill.paid = (status == 'yes')
+            bill.save()
+            success=True
+    except Exception:
+        pass
+    return HttpResponse(json.dumps(dict(
+        status=status,
+        success=success,
+        bill_id=bill_id
+    )))
 
 
 

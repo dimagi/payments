@@ -21,6 +21,10 @@ class TestMonthlyBillFewUsers(TestCase):
         for user in all_users:
             user.delete()
 
+        all_billables = SMSBillable.get_all()
+        for billable in all_billables:
+            billable.delete()
+
         self.domain = Domain()
         self.domain.name = "ihavefewusers"
         self.domain.is_active = True
@@ -73,11 +77,12 @@ class TestMonthlyBillFewUsers(TestCase):
         logging.info("Testing few users with SMS")
         generate_monthly_bills()
         last_bill = HQMonthlyBill.get_bills(self.domain.name).first()
+        print last_bill
         if last_bill:
             self.assertEqual(self.bill_in.total_billed,
-                last_bill.all_incoming_sms_billed)
+                last_bill.incoming_sms_billed)
             self.assertEqual(self.bill_out.total_billed,
-                last_bill.all_outgoing_sms_billed)
+                last_bill.outgoing_sms_billed)
             self.assertEqual(self.num_active_users, len(last_bill.active_users))
             self.assertEqual(0, last_bill.active_users_billed)
         else:
@@ -120,9 +125,9 @@ class TestMonthlyBillManyUsers(TestCase):
         last_bill = HQMonthlyBill.get_bills(self.domain.name).first()
         if last_bill:
             self.assertEqual(0,
-                last_bill.all_incoming_sms_billed)
+                last_bill.incoming_sms_billed)
             self.assertEqual(0,
-                last_bill.all_outgoing_sms_billed)
+                last_bill.outgoing_sms_billed)
             self.assertEqual(self.num_active_users, len(last_bill.active_users))
             self.assertEqual(self.num_active_users*ACTIVE_USER_RATE, last_bill.active_users_billed)
         else:
