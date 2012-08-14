@@ -1,5 +1,6 @@
 import datetime
 import logging
+import decimal
 from django.test import TestCase
 from corehq.apps.domain.models import Domain
 from corehq.apps.users.models import CommCareUser
@@ -128,6 +129,6 @@ class TestMonthlyBillManyUsers(TestCase):
             self.assertEqual(0,
                 last_bill.outgoing_sms_billed)
             self.assertEqual(self.num_active_users, len(last_bill.active_users))
-            self.assertEqual(self.num_active_users*ACTIVE_USER_RATE, last_bill.active_users_billed)
+            self.assertEqual(decimal.Decimal(self.num_active_users*ACTIVE_USER_RATE), last_bill.active_users_billed)
         else:
             raise Exception("Monthly Bill not successfully generated.")
