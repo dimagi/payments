@@ -8,8 +8,10 @@ from django.utils.safestring import mark_safe
 import magic
 from openpyxl.shared.exc import InvalidFileException
 from dimagi.utils.excel import WorkbookJSONReader
-from corehq.apps.hq_bootstrap.forms.widgets import BootstrapRadioSelect, BootstrapAddressField, BootstrapPhoneNumberInput
-from hqbilling.models import SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING, SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency
+from corehq.apps.hq_bootstrap.forms.widgets import BootstrapRadioSelect, \
+    BootstrapAddressField, BootstrapPhoneNumberInput
+from hqbilling.models import SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING, \
+    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency
 
 DIRECTION_CHOICES = ((OUTGOING, SMS_DIRECTIONS.get(OUTGOING),), (INCOMING, SMS_DIRECTIONS.get(INCOMING),))
 DUPE_CHECK_NEW = "new"
@@ -32,7 +34,9 @@ class DomainBillingInfoForm(forms.Form):
             error_class, label_suffix, empty_permitted)
         all_currencies = BillableCurrency.get_all()
         if all_currencies:
-            self.fields['currency_code'].choices = [(cur.currency_code, mark_safe("%s %s" % (cur.symbol, cur.currency_code))) for cur in all_currencies]
+            self.fields['currency_code'].choices = [(cur.currency_code, mark_safe("%s %s" %
+                                                                                  (cur.symbol, cur.currency_code)))
+                                                                        for cur in all_currencies]
 
     def save(self, domain):
         params = self.cleaned_data
@@ -85,7 +89,7 @@ class BillableCurrencyUpdateForm(ItemUpdateForm):
 
 
 class TaxRateUpdateForm(ItemUpdateForm):
-    country = forms.CharField(required=False, label="Country (or blank for any)")
+    country = forms.CharField(required=False, label="Country\n (or blank for any)")
     tax_rate = forms.DecimalField(required=True, label="Tax Rate %")
 
     @property
@@ -96,7 +100,8 @@ class TaxRateUpdateForm(ItemUpdateForm):
         cleaned_data = super(TaxRateUpdateForm, self).clean()
         tax_rate = TaxRateByCountry.get_by_country(cleaned_data.get("country")).first()
         if tax_rate and self.item_id is None:
-            raise ValidationError("A tax rate for the country %s already exists. Please edit that existing rate." % cleaned_data.get("country"))
+            raise ValidationError("A tax rate for the country %s already exists. Please edit that existing rate." %
+                                  cleaned_data.get("country"))
         elif tax_rate and self.item_id != tax_rate.get_id:
             raise ValidationError("There is already a tax rate for that country.")
         return cleaned_data
@@ -149,7 +154,7 @@ class UnicelSMSRateForm(SMSRateForm):
 
 
 class DimagiSMSRateForm(SMSRateForm):
-    domain = forms.CharField(label="Project Name")
+    domain = forms.CharField(label="Project Name\n (blank for any)", required=False)
 
     @property
     def item_class(self):

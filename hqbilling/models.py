@@ -43,21 +43,33 @@ class HQMonthlyBill(Document):
     active_users_billed = DecimalProperty(default=0)
     paid = BooleanProperty(default=False)
 
-    def __getattr__(self, key):
-        if key == 'domain_object':
+    _domain_object = None
+    @property
+    def domain_object(self):
+        if not self._domain_object:
             from corehq.apps.domain.models import Domain
-            return Domain.get_by_name(self.domain)
-        if key == 'currency':
+            self._domain_object = Domain.get_by_name(self.domain)
+        return self._domain_object
+
+    _currency = None
+    @property
+    def currency(self):
+        if not self._currency:
             currency_code = self.domain_object.currency_code if hasattr(self.domain_object, 'currency_code') else None
             if not currency_code:
                 currency_code = settings.DEFAULT_CURRENCY
-            return BillableCurrency.get_by_code(currency_code).first()
-        if key == 'tax':
+            self._currency = BillableCurrency.get_by_code(currency_code).first()
+        return self._currency
+
+    _tax = None
+    @property
+    def tax(self):
+        if not self._tax:
             tax_rate = TaxRateByCountry.get_by_country(self.domain_object.billing_address.country).first()
             if not tax_rate:
                 tax_rate = TaxRateByCountry.get_default()
-            return tax_rate
-        return super(HQMonthlyBill, self).__getattr__(key)
+            self._tax = tax_rate
+        return self._tax
 
     @property
     def invoice_id(self):
@@ -214,8 +226,7 @@ class HQMonthlyBill(Document):
         return itemized
 
     def _fmt_cost(self, cost):
-        currency = self.currency
-        return mark_safe("%s %.2f" % (currency.safe_symbol, cost/currency.safe_conversion))
+        return mark_safe("%s %.2f" % (self.currency.safe_symbol, cost/self.currency.safe_conversion))
 
     def _get_all_active_and_submitted_users(self):
         """
@@ -298,8 +309,8 @@ class HQMonthlyBill(Document):
         )
 
     @classmethod
-    def create_bill_for_domain(cls, domain_obj, billing_range=None):
-        bill = cls(domain=domain_obj.name)
+    def create_bill_for_domain(cls, domain, billing_range=None):
+        bill = cls(domain=domain)
         bill.new_bill(billing_range)
 
         if bill.incoming_sms_billed > 0 or \
@@ -308,6 +319,9 @@ class HQMonthlyBill(Document):
             # save only the bills with costs attached so that there isn't a long list
             # of non-actionable bills at the end
             bill.save()
+            logging.info("[BILLING] Bill for project %s was created." % domain)
+        else:
+            logging.info("[BILLING] No Bill for project %s was created." % domain)
         return bill
 
 
@@ -729,9 +743,19 @@ class DimagiDomainSMSRate(SMSRate):
                 "direction",
                 "base_fee"]
 
+    def _format_property(self, key, property):
+        if key == "domain":
+            return property if property else "Applies to All Non-Matching Projects"
+        return super(DimagiDomainSMSRate, self)._format_property(key, property)
+
     def update_item_from_form(self, overwrite=True, **kwargs):
         self.domain = self.correctly_format_code(kwargs.get("domain", ''))
         super(DimagiDomainSMSRate, self).update_item_from_form(overwrite, **kwargs)
+
+    @classmethod
+    def get_default_rate(cls, direction):
+        match_key = cls.generate_match_key(**dict(direction=direction, domain=''))
+        return cls.get_by_match(match_key)
 
     @staticmethod
     def couch_view():
@@ -812,6 +836,8 @@ class SMSBillable(Document):
             domain=message.domain
         ))
         dimagi_rate = DimagiDomainSMSRate.get_by_match(match_key)
+        if not dimagi_rate:
+            dimagi_rate = DimagiDomainSMSRate.get_default_rate(message.direction)
         self.dimagi_surcharge = dimagi_rate.base_fee if dimagi_rate else 0
 
     def calculate_rate(self, rate_item, message):

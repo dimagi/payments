@@ -10,7 +10,7 @@ from hqbilling.tasks import generate_monthly_bills
 class TestMonthlyBillFewUsers(TestCase):
 
     def setUp(self):
-        two_weeks = datetime.timedelta(days=15)
+        two_weeks = datetime.timedelta(days=14)
 
         for domain in Domain.get_all():
             domain.delete()
