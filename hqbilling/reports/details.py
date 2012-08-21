@@ -2,7 +2,7 @@ from django.core.urlresolvers import reverse
 from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DTSortType, DataTablesColumnGroup
 from corehq.apps.reports.standard import StandardTabularHQReport, StandardHQReport, StandardDateHQReport
 from corehq.apps.reports import util as report_utils
-from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField
+from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, SelectSMSBillableDomainsField
 from hqbilling.models import MachSMSBillable, TropoSMSBillable, UnicelSMSBillable, HQMonthlyBill, SMS_DIRECTIONS, TaxRateByCountry, SMSBillable
 from hqbilling.reports import HQBillingReport
 
@@ -11,9 +11,9 @@ def format_bill_amount(amount):
 
 class DetailReportsMixin(object):
 
-    def _get_projects(self, request):
-        project = request.GET.get(SelectBilledDomainsField.slug)
-        all_projects = SelectBilledDomainsField.get_billable_domains()
+    def _get_projects(self, request, filter_class):
+        project = request.GET.get(filter_class.slug)
+        all_projects = filter_class.get_billable_domains()
         self.projects = [project] if project else all_projects
 
 class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQReport, DetailReportsMixin):
@@ -24,7 +24,7 @@ class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQRe
               'hqbilling.fields.SelectSMSDirectionField']
 
     def get_parameters(self):
-        self._get_projects(self.request)
+        self._get_projects(self.request, SelectSMSBillableDomainsField)
         self.direction = self.request.GET.get(SelectSMSDirectionField.slug)
         self.totals = [0,0,0]
 
@@ -79,7 +79,7 @@ class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQ
     exportable = False
 
     def get_parameters(self):
-        self._get_projects(self.request)
+        self._get_projects(self.request, SelectBilledDomainsField)
 
     def get_headers(self):
         return DataTablesHeader(DataTablesColumn("Project"),
