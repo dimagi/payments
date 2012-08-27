@@ -7,16 +7,15 @@ from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 import json
 from django.template.loader import render_to_string
 from corehq.apps.domain.decorators import login_and_domain_required, require_superuser
-from corehq.apps.reports.views import report_dispatcher, datespan_default
+from corehq.apps.reports.views import datespan_default
 from dimagi.utils.web import render_to_response
 from hqbilling.forms import *
 from hqbilling.models import *
 
 @require_superuser
 def default_billing_report(request):
-    from hqbilling.dispatcher import BillingInterfaceDispatcher
     from hqbilling.reports.details import MonthlyBillReport
-    return HttpResponseRedirect(reverse(BillingInterfaceDispatcher.name(), args=[MonthlyBillReport.slug]))
+    return HttpResponseRedirect(MonthlyBillReport.get_url())
 
 @require_superuser
 def updatable_item_form(request, form, item_type="",
@@ -65,10 +64,8 @@ def bill_invoice(request, bill_id,
                  partial="hqbilling/partials/invoice.html"):
     range_fmt = "%B %d, %Y"
     bill = HQMonthlyBill.get(bill_id)
-    from hqbilling.dispatcher import BillingInterfaceDispatcher
     from hqbilling.reports.details import MonthlyBillReport
-    parent_link = '<a href="%s">%s<a>' % (reverse(BillingInterfaceDispatcher.name(), args=[MonthlyBillReport.slug]),
-                                          MonthlyBillReport.name)
+    parent_link = '<a href="%s">%s<a>' % (MonthlyBillReport.get_url(), MonthlyBillReport.name)
     billing_range = "%s to %s" % (bill.billing_period_start.strftime(range_fmt),
                                   bill.billing_period_end.strftime(range_fmt))
     view_title = "%s %s for %s" % (bill.billing_period_start.strftime("%B %Y"),
