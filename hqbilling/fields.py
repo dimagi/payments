@@ -1,5 +1,4 @@
-from corehq.apps.reports.custom import ReportSelectField
-from corehq.apps.reports.fields import DatespanField
+from corehq.apps.reports.fields import DatespanField, ReportSelectField
 from dimagi.utils.couch.database import get_db
 from hqbilling.models import OUTGOING, SMS_DIRECTIONS, INCOMING
 

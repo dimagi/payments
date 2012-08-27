@@ -1,7 +1,5 @@
 from django.core.urlresolvers import reverse
-from corehq.apps.reports.custom import HQReport
 from corehq.apps.reports.generic import GenericReportView, GenericTabularReport
-from corehq.apps.reports.standard import StandardTabularHQReport
 from hqbilling.dispatcher import BillingInterfaceDispatcher
 from hqbilling.forms import SMSRateForm
 from hqbilling.models import SMSRate

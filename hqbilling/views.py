@@ -18,29 +18,6 @@ def default_billing_report(request):
     from hqbilling.reports.details import MonthlyBillReport
     return HttpResponseRedirect(reverse(BillingInterfaceDispatcher.name(), args=[MonthlyBillReport.slug]))
 
-#@require_superuser
-#@datespan_default
-#def billing_report_dispatcher(request, report_slug, return_json=False, report_map='BILLING_REPORT_MAP', export=False, async=False, async_filters=False, static_only=False):
-#    mapping = getattr(settings, report_map, None)
-#    if not mapping:
-#        return HttpResponseNotFound("Sorry, no reports have been configured yet.")
-#    for key, models in mapping.items():
-#        for model in models:
-#            klass = to_function(model)
-#            if klass.slug == report_slug:
-#                k = klass(None, request)
-#                if return_json:
-#                    return k.as_json()
-#                elif export:
-#                    return k.as_export()
-#                elif async:
-#                    return k.as_async(static_only=static_only)
-#                elif async_filters:
-#                    return k.as_async_filters()
-#                else:
-#                    return k.as_view()
-#    raise Http404
-
 @require_superuser
 def updatable_item_form(request, form, item_type="",
                       item_id="", template="hqbilling/forms/new_rate.html"):
