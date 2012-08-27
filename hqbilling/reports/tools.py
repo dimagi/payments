@@ -10,7 +10,8 @@ class BillableCurrencyReport(UpdatableItem):
     form_class = BillableCurrencyUpdateForm
     item_class = BillableCurrency
 
-    def get_headers(self):
+    @property
+    def headers(self):
         headers = DataTablesHeader(
             DataTablesColumn("Currency Code"),
             DataTablesColumn("Symbol"),
@@ -30,7 +31,8 @@ class TaxRateReport(UpdatableItem):
     form_class = TaxRateUpdateForm
     item_class = TaxRateByCountry
 
-    def get_headers(self):
+    @property
+    def headers(self):
         headers = DataTablesHeader(
             DataTablesColumn("Country"),
             DataTablesColumn("Tax Rate"),

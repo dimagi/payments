@@ -1,7 +1,11 @@
 from django.conf.urls.defaults import *
+from hqbilling.dispatcher import BillingInterfaceDispatcher
 
 urlpatterns = patterns('hqbilling.views',
     url(r'^$', "default_billing_report", name="billing_default"),
+    url(BillingInterfaceDispatcher.pattern(), BillingInterfaceDispatcher.as_view(),
+        name=BillingInterfaceDispatcher.name()
+    ),
 #    url(r'^delete/all/', "deltestdata"),
 
     url(r'^forms/(?P<form>[\w_]+)/(?P<item_type>[\w_]+)/(?P<item_id>[\w_]+)/$', 'updatable_item_form',
@@ -25,18 +29,4 @@ urlpatterns = patterns('hqbilling.views',
     url(r'^bill/status/(?P<bill_id>[\w-]+)/(?P<status>[(yes)|(no)]+)/$', 'bill_status_update',
         name='billing_update_bill'),
 
-    url(r'^async/filters/(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher',
-        name="billing_report_async_filter_dispatcher", kwargs={
-        'async_filters': True
-    }),
-    url(r'^async/(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher',
-        name="billing_report_async_dispatcher", kwargs={
-        'async': True
-    }),
-    url(r'^export/(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher',
-        name="billing_report_export_dispatcher", kwargs={
-        'export': True
-    }),
-    url(r'^(?P<report_slug>[\w_]+)/$', 'billing_report_dispatcher',
-        name="billing_report_dispatcher"),
 )

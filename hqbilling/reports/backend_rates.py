@@ -9,11 +9,14 @@ from hqbilling.reports import UpdatableItem
 class MachRateReport(UpdatableItem):
     slug = "mach_rates"
     name = "MACH Rates"
+
     form_class = MachSMSRateForm
     item_class = MachSMSRate
-    template_name = "hqbilling/reports/mach_rate_report.html"
+    report_template_path = "hqbilling/reports/mach_rate_report.html"
 
-    def get_parameters(self):
+    @property
+    def report_context(self):
+        context = super(MachRateReport, self).report_context
         if self.request.method == 'POST':
             bulk_upload_form = MachExcelFileUploadForm(self.request.POST, self.request.FILES)
             if bulk_upload_form.is_valid():
@@ -23,12 +26,11 @@ class MachRateReport(UpdatableItem):
                 messages.error(self.request, "Bulk Upload did not work.")
         else:
             bulk_upload_form = MachExcelFileUploadForm()
+        context.update(mach_bulk_upload_form=bulk_upload_form)
+        return context
 
-        self.context.update(dict(
-            mach_bulk_upload_form = bulk_upload_form
-        ))
-
-    def get_headers(self):
+    @property
+    def headers(self):
         headers = DataTablesHeader(
             DataTablesColumn("Direction"),
             DataTablesColumn("Country"),
@@ -53,7 +55,8 @@ class TropoRateReport(UpdatableItem):
     form_class = TropoSMSRateForm
     item_class = TropoSMSRate
 
-    def get_headers(self):
+    @property
+    def headers(self):
         headers = DataTablesHeader(
             DataTablesColumn("Direction"),
             DataTablesColumn("Country Code"),
@@ -68,7 +71,8 @@ class UnicelRateReport(UpdatableItem):
     form_class = UnicelSMSRateForm
     item_class = UnicelSMSRate
 
-    def get_headers(self):
+    @property
+    def headers(self):
         headers = DataTablesHeader(
             DataTablesColumn("Direction"),
             DataTablesColumn("Fee"),
@@ -82,7 +86,8 @@ class DimagiRateReport(UpdatableItem):
     form_class = DimagiSMSRateForm
     item_class = DimagiDomainSMSRate
 
-    def get_headers(self):
+    @property
+    def headers(self):
         headers = DataTablesHeader(
             DataTablesColumn("Domain"),
             DataTablesColumn("Direction"),

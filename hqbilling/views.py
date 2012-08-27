@@ -11,34 +11,35 @@ from corehq.apps.reports.views import report_dispatcher, datespan_default
 from dimagi.utils.web import render_to_response
 from hqbilling.forms import *
 from hqbilling.models import *
-from hqbilling.reports.details import MonthlyBillReport
 
 @require_superuser
 def default_billing_report(request):
-    return HttpResponseRedirect(reverse("billing_report_dispatcher", kwargs=dict(report_slug=MonthlyBillReport.slug)))
+    from hqbilling.dispatcher import BillingInterfaceDispatcher
+    from hqbilling.reports.details import MonthlyBillReport
+    return HttpResponseRedirect(reverse(BillingInterfaceDispatcher.name(), args=[MonthlyBillReport.slug]))
 
-@require_superuser
-@datespan_default
-def billing_report_dispatcher(request, report_slug, return_json=False, report_map='BILLING_REPORT_MAP', export=False, async=False, async_filters=False, static_only=False):
-    mapping = getattr(settings, report_map, None)
-    if not mapping:
-        return HttpResponseNotFound("Sorry, no reports have been configured yet.")
-    for key, models in mapping.items():
-        for model in models:
-            klass = to_function(model)
-            if klass.slug == report_slug:
-                k = klass(None, request)
-                if return_json:
-                    return k.as_json()
-                elif export:
-                    return k.as_export()
-                elif async:
-                    return k.as_async(static_only=static_only)
-                elif async_filters:
-                    return k.as_async_filters()
-                else:
-                    return k.as_view()
-    raise Http404
+#@require_superuser
+#@datespan_default
+#def billing_report_dispatcher(request, report_slug, return_json=False, report_map='BILLING_REPORT_MAP', export=False, async=False, async_filters=False, static_only=False):
+#    mapping = getattr(settings, report_map, None)
+#    if not mapping:
+#        return HttpResponseNotFound("Sorry, no reports have been configured yet.")
+#    for key, models in mapping.items():
+#        for model in models:
+#            klass = to_function(model)
+#            if klass.slug == report_slug:
+#                k = klass(None, request)
+#                if return_json:
+#                    return k.as_json()
+#                elif export:
+#                    return k.as_export()
+#                elif async:
+#                    return k.as_async(static_only=static_only)
+#                elif async_filters:
+#                    return k.as_async_filters()
+#                else:
+#                    return k.as_view()
+#    raise Http404
 
 @require_superuser
 def updatable_item_form(request, form, item_type="",
@@ -87,9 +88,10 @@ def bill_invoice(request, bill_id,
                  partial="hqbilling/partials/invoice.html"):
     range_fmt = "%B %d, %Y"
     bill = HQMonthlyBill.get(bill_id)
-    parent_link = '<a href="%s">%s<a>' % (reverse("billing_report_dispatcher", kwargs=dict(
-        report_slug=MonthlyBillReport.slug
-    )), MonthlyBillReport.name)
+    from hqbilling.dispatcher import BillingInterfaceDispatcher
+    from hqbilling.reports.details import MonthlyBillReport
+    parent_link = '<a href="%s">%s<a>' % (reverse(BillingInterfaceDispatcher.name(), args=[MonthlyBillReport.slug]),
+                                          MonthlyBillReport.name)
     billing_range = "%s to %s" % (bill.billing_period_start.strftime(range_fmt),
                                   bill.billing_period_end.strftime(range_fmt))
     view_title = "%s %s for %s" % (bill.billing_period_start.strftime("%B %Y"),

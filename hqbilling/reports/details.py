@@ -1,5 +1,7 @@
 from django.core.urlresolvers import reverse
+from corehq.apps.reports._global import DatespanMixin
 from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DTSortType, DataTablesColumnGroup
+from corehq.apps.reports.generic import GenericTabularReport
 from corehq.apps.reports.standard import StandardTabularHQReport, StandardHQReport, StandardDateHQReport
 from corehq.apps.reports import util as report_utils
 from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, SelectSMSBillableDomainsField
@@ -9,26 +11,40 @@ from hqbilling.reports import HQBillingReport
 def format_bill_amount(amount):
     return report_utils.format_datatables_data(text="$ %.2f" % amount, sort_key=amount)
 
-class DetailReportsMixin(object):
+class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
+    """
+        Base class for Billing detail reports
+    """
+    project_filter_class = None
 
-    def _get_projects(self, request, filter_class):
-        project = request.GET.get(filter_class.slug)
-        all_projects = filter_class.get_billable_domains()
-        self.projects = [project] if project else all_projects
+    _projects = None
+    @property
+    def projects(self):
+        if self._projects is None:
+            project = self.request.GET.get(self.project_filter_class.slug)
+            all_projects = self.project_filter_class.get_billable_domains()
+            self._projects = [project] if project else all_projects
+        return self._projects
 
-class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQReport, DetailReportsMixin):
+
+class SMSDetailReport(BillingDetailReport):
     name = "Messaging"
     slug = "sms_detail"
     fields = ['corehq.apps.reports.fields.DatespanField',
               'hqbilling.fields.SelectSMSBillableDomainsField',
               'hqbilling.fields.SelectSMSDirectionField']
 
-    def get_parameters(self):
-        self._get_projects(self.request, SelectSMSBillableDomainsField)
-        self.direction = self.request.GET.get(SelectSMSDirectionField.slug)
-        self.totals = [0,0,0]
+    project_filter_class = SelectSMSBillableDomainsField
 
-    def get_headers(self):
+    _direction = None
+    @property
+    def direction(self):
+        if self._direction is None:
+            self._direction = self.request.GET.get(SelectSMSDirectionField.slug)
+        return self._direction
+
+    @property
+    def headers(self):
         return DataTablesHeader(
             DataTablesColumn("Date", span=2),
             DataTablesColumn("Project", span=3),
@@ -41,8 +57,10 @@ class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQRe
             )
         )
 
-    def get_rows(self):
+    @property
+    def rows(self):
         rows = []
+        totals = [0,0,0]
         for project in self.projects:
             if self.direction:
                 billables = SMSBillable.by_domain_and_direction(project, self.direction,
@@ -51,9 +69,9 @@ class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQRe
                 billables = SMSBillable.by_domain(project,
                     start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
             for billable in billables:
-                self.totals[0] += billable.converted_billable_amount
-                self.totals[1] += billable.dimagi_surcharge
-                self.totals[2] += billable.total_billed
+                totals[0] += billable.converted_billable_amount
+                totals[1] += billable.dimagi_surcharge
+                totals[2] += billable.total_billed
                 rows.append([
                     report_utils.format_datatables_data(
                         billable.billable_date.strftime("%B %d, %Y %H:%M:%S"),
@@ -66,22 +84,22 @@ class SMSDetailReport(HQBillingReport, StandardTabularHQReport, StandardDateHQRe
                     format_bill_amount(billable.dimagi_surcharge),
                     format_bill_amount(billable.total_billed)
                 ])
-        self.total_row = ["","","","Total Billed:"]+["%.2f" % t for t in self.totals]
+        self.total_row = ["","","","Total Billed:"]+["%.2f" % t for t in totals]
         return rows
 
 
-class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQReport, DetailReportsMixin):
+class MonthlyBillReport(BillingDetailReport):
     name = "Monthly Bill by Project"
     slug = "monthly_bill"
     fields = ['hqbilling.fields.DatespanBillingStartField',
               'hqbilling.fields.SelectBilledDomainsField']
-    template_name = "hqbilling/reports/monthly_bill_summary_report.html"
+    report_template_path = "hqbilling/reports/monthly_bill_summary_report.html"
     exportable = False
 
-    def get_parameters(self):
-        self._get_projects(self.request, SelectBilledDomainsField)
+    project_filter_class = SelectBilledDomainsField
 
-    def get_headers(self):
+    @property
+    def headers(self):
         return DataTablesHeader(DataTablesColumn("Project"),
             DataTablesColumnGroup("Billing Period",
                 DataTablesColumn("Start"),
@@ -102,10 +120,11 @@ class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQ
             DataTablesColumn("Itemized", sortable=False)
         )
 
-    def get_rows(self):
+    @property
+    def rows(self):
         rows = []
-
-        payment_button_template = """<a href="#changePaymentStatusModal" onclick="payment_status.updateModalForm('%(bill_id)s')"
+        payment_button_template = """<a href="#changePaymentStatusModal"
+        onclick="payment_status.updateModalForm('%(bill_id)s')"
         id="update-%(bill_id)s" data-toggle="modal" class="btn %(button_class)s"
         data-domain="%(domain)s" data-billingstart="%(billing_start)s" data-billingend="%(billing_end)s">
     %(payment_status_text)s
@@ -147,8 +166,10 @@ class MonthlyBillReport(HQBillingReport, StandardTabularHQReport, StandardDateHQ
                         ),
                         sort_key=int(bill.paid)
                     ),
-                    '<a href="%s" class="btn btn-primary">View Invoice</a>' % reverse("billing_invoice", kwargs=dict(bill_id=bill.get_id)),
-                    '<a href="%s" class="btn"><i class="icon icon-list"></i> View Itemized</a>' % reverse("billing_itemized", kwargs=dict(bill_id=bill.get_id))
+                    '<a href="%s" class="btn btn-primary">View Invoice</a>' %
+                        reverse("billing_invoice", kwargs=dict(bill_id=bill.get_id)),
+                    '<a href="%s" class="btn"><i class="icon icon-list"></i> View Itemized</a>' %
+                        reverse("billing_itemized", kwargs=dict(bill_id=bill.get_id))
                 ])
 
         return rows

@@ -1,6 +1,6 @@
-{% load payment_tags %}
+{% load report_tags %}
 <nav>
     <ul class="nav nav-list" id="report-list">
-        {% payment_report_list slug %}
+        {% report_list 'hqbilling.dispatcher.BillingInterfaceDispatcher' %}
     </ul>
 </nav>
