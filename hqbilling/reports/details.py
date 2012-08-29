@@ -7,9 +7,6 @@ from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, 
 from hqbilling.models import MachSMSBillable, TropoSMSBillable, UnicelSMSBillable, HQMonthlyBill, SMS_DIRECTIONS, TaxRateByCountry, SMSBillable
 from hqbilling.reports import HQBillingReport
 
-def format_bill_amount(amount):
-    return report_utils.format_datatables_data(text="$ %.2f" % amount, sort_key=amount)
-
 class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
     """
         Base class for Billing detail reports
@@ -24,6 +21,9 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
             all_projects = self.project_filter_class.get_billable_domains()
             self._projects = [project] if project else all_projects
         return self._projects
+
+    def _format_bill_amount(self, amount):
+        return self.table_cell(amount, "$ %.2f" % amount)
 
 
 class SMSDetailReport(BillingDetailReport):
@@ -72,16 +72,14 @@ class SMSDetailReport(BillingDetailReport):
                 totals[1] += billable.dimagi_surcharge
                 totals[2] += billable.total_billed
                 rows.append([
-                    report_utils.format_datatables_data(
-                        billable.billable_date.strftime("%B %d, %Y %H:%M:%S"),
-                        billable.billable_date
-                    ),
+                    self.table_cell(billable.billable_date,
+                        billable.billable_date.strftime("%B %d, %Y %H:%M:%S")),
                     project,
                     SMS_DIRECTIONS.get(billable.direction),
                     eval(billable.doc_type).api_name(),
-                    format_bill_amount(billable.converted_billable_amount),
-                    format_bill_amount(billable.dimagi_surcharge),
-                    format_bill_amount(billable.total_billed)
+                    self._format_bill_amount(billable.converted_billable_amount),
+                    self._format_bill_amount(billable.dimagi_surcharge),
+                    self._format_bill_amount(billable.total_billed)
                 ])
         self.total_row = ["","","","Total Billed:"]+["%.2f" % t for t in totals]
         return rows
@@ -139,22 +137,23 @@ class MonthlyBillReport(BillingDetailReport):
                 nice_end = bill.billing_period_end.strftime("%B %d, %Y")
                 rows.append([
                     project,
-                    report_utils.format_datatables_data(
-                        nice_start,
-                        bill.billing_period_start
+                    self.table_cell(
+                        bill.billing_period_start,
+                        nice_start
                     ),
-                    report_utils.format_datatables_data(
-                        nice_end,
-                        bill.billing_period_end
+                    self.table_cell(
+                        bill.billing_period_end,
+                        nice_end
                     ),
-                    format_bill_amount(bill.incoming_sms_billed),
-                    format_bill_amount(bill.outgoing_sms_billed),
-                    format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed),
+                    self._format_bill_amount(bill.incoming_sms_billed),
+                    self._format_bill_amount(bill.outgoing_sms_billed),
+                    self._format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed),
                     len(bill.active_users),
                     bill.active_users_billed,
-                    format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed+bill.active_users_billed),
-                    report_utils.format_datatables_data(
-                        text=payment_button_template % dict(
+                    self._format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed+bill.active_users_billed),
+                    self.table_cell(
+                        int(bill.paid),
+                        payment_button_template % dict(
                             bill_id=bill.get_id,
                             payment_status="yes" if bill.paid else "no",
                             payment_status_text="Paid" if bill.paid else "Not Paid",
@@ -162,8 +161,7 @@ class MonthlyBillReport(BillingDetailReport):
                             billing_start=nice_start,
                             billing_end=nice_end,
                             domain=project
-                        ),
-                        sort_key=int(bill.paid)
+                        )
                     ),
                     '<a href="%s" class="btn btn-primary">View Invoice</a>' %
                         reverse("billing_invoice", kwargs=dict(bill_id=bill.get_id)),
