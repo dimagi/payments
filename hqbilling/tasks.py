@@ -2,7 +2,7 @@ import datetime
 from celery.log import get_task_logger
 import re
 from celery.schedules import crontab, schedule
-from celery.decorators import periodic_task, task
+from celery.task import periodic_task, task
 from django.conf import settings
 import urllib2
 from hqbilling.models import MachSMSRate, UnicelSMSRate, TropoSMSRate, MachSMSBillable, \
