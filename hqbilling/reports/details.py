@@ -1,5 +1,5 @@
 from django.core.urlresolvers import reverse
-from corehq.apps.reports._global import DatespanMixin
+from corehq.apps.reports.standard import DatespanMixin
 from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DTSortType, DataTablesColumnGroup
 from corehq.apps.reports.generic import GenericTabularReport
 from corehq.apps.reports import util as report_utils
