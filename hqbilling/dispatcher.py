@@ -1,8 +1,6 @@
-from corehq.apps.domain.decorators import require_superuser, cls_to_view
+from corehq.apps.domain.decorators import cls_require_superusers
 from corehq.apps.reports.dispatcher import ReportDispatcher
 from corehq.apps.reports.views import datespan_default
-
-cls_require_superusers = cls_to_view(additional_decorator=require_superuser)
 
 class BillingInterfaceDispatcher(ReportDispatcher):
     prefix = 'billing_interface'

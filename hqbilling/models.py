@@ -328,6 +328,7 @@ class HQMonthlyBill(Document):
 class UpdatableItemMixin(object):
     """
         This is what the item updating reports will use to display/edit an item
+        #todo use the genericized version in dimagi-utils
     """
     def __getattr__(self, name):
         if name == 'get_id':

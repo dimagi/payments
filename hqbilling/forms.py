@@ -44,16 +44,13 @@ class DomainBillingInfoForm(forms.Form):
         domain.save()
 
 class ItemUpdateForm(forms.Form):
-
+    # todo move over to the version in dimagi-utils
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                  initial=None, error_class=ErrorList, label_suffix=':',
                  empty_permitted=False, item_id=None):
         self.item_id = item_id
         super(ItemUpdateForm, self).__init__(data, files, auto_id, prefix, initial,
             error_class, label_suffix, empty_permitted)
-
-    def save(self):
-        return NotImplementedError
 
     @property
     def item_class(self):
