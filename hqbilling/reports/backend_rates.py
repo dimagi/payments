@@ -15,9 +15,9 @@ class MachRateReport(UpdatableItem):
     report_template_path = "hqbilling/reports/mach_rate_report.html"
 
     def _update_initial_context(self):
-        super(MachRateReport, self)._update_initial_context()
         if self.request.method == 'POST':
             self.asynchronous = False
+        super(MachRateReport, self)._update_initial_context()
 
     @property
     def report_context(self):
