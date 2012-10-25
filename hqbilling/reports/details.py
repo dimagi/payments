@@ -17,7 +17,7 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
     @property
     def projects(self):
         if self._projects is None:
-            project = self.request.GET.get(self.project_filter_class.slug)
+            project = self.report_request.GET.get(self.project_filter_class.slug)
             all_projects = self.project_filter_class.get_billable_domains()
             self._projects = [project] if project else all_projects
         return self._projects
@@ -39,7 +39,7 @@ class SMSDetailReport(BillingDetailReport):
     @property
     def direction(self):
         if self._direction is None:
-            self._direction = self.request.GET.get(SelectSMSDirectionField.slug)
+            self._direction = self.report_request.GET.get(SelectSMSDirectionField.slug)
         return self._direction
 
     @property
