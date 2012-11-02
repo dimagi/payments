@@ -45,14 +45,14 @@ class SMSDetailReport(BillingDetailReport):
     @property
     def headers(self):
         return DataTablesHeader(
-            DataTablesColumn("Date", span=2),
-            DataTablesColumn("Project", span=3),
-            DataTablesColumn("Direction", span=2),
-            DataTablesColumn("Backend API", span=2),
+            DataTablesColumn("Date"),
+            DataTablesColumn("Project"),
+            DataTablesColumn("Direction"),
+            DataTablesColumn("Backend API"),
             DataTablesColumnGroup("Charges",
-                DataTablesColumn("Backend Fee", span=1),
-                DataTablesColumn("Dimagi Fee", span=1),
-                DataTablesColumn("Total", span=1)
+                DataTablesColumn("Backend Fee"),
+                DataTablesColumn("Dimagi Fee"),
+                DataTablesColumn("Total")
             )
         )
 
