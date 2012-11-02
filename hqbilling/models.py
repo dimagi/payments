@@ -805,6 +805,7 @@ class SMSBillable(Document):
         The cost is generated at the time the SMS is sent or received.
     """
     billable_date = DateTimeProperty()
+    modified_date = DateTimeProperty()
     # billable amount is not converted into USD, stays in the billing rate's currency
     # this is the amount that the SMS backend is billing Dimagi
     billable_amount = DecimalProperty()
@@ -841,9 +842,11 @@ class SMSBillable(Document):
             dimagi_rate = DimagiDomainSMSRate.get_default_rate(message.direction)
         self.dimagi_surcharge = dimagi_rate.base_fee if dimagi_rate else 0
 
-    def calculate_rate(self, rate_item, message):
+    def calculate_rate(self, rate_item, message, real_time=True):
         if rate_item:
-            self.billable_date = datetime.datetime.utcnow()
+            if real_time or self.billable_date is None:
+                self.billable_date = datetime.datetime.utcnow()
+            self.modified_date = datetime.datetime.utcnow()
             self.billable_amount = rate_item.billable_amount
             self.conversion_rate = rate_item.conversion_rate
             self.rate_id = rate_item._id
