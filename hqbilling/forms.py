@@ -8,7 +8,7 @@ from django.utils.safestring import mark_safe
 import magic
 from openpyxl.shared.exc import InvalidFileException
 from dimagi.utils.excel import WorkbookJSONReader
-from corehq.apps.hq_bootstrap.forms.widgets import BootstrapRadioSelect, \
+from hqstyle.forms.widgets import BootstrapRadioSelect, \
     BootstrapAddressField, BootstrapPhoneNumberInput
 from hqbilling.models import SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING, \
     SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency
