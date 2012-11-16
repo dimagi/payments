@@ -12,6 +12,7 @@ import urllib2
 from django.utils.safestring import mark_safe
 import phonenumbers
 import pytz
+from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
 from dimagi.utils.timezones import utils as tz_utils
@@ -238,14 +239,17 @@ class HQMonthlyBill(Document):
         from corehq.apps.users.models import CommCareUser
         active_user_ids = [user.user_id for user in CommCareUser.by_domain(self.domain)]
         inactive_user_ids = [user.user_id for user in CommCareUser.by_domain(self.domain, is_active=False)]
-        data = get_db().view('reports/all_submissions',
+
+        key = make_form_couch_key(self.domain)
+        data = get_db().view('reports_forms/all_forms',
             reduce=False,
-            startkey = [self.domain, self.billing_period_start.isoformat()],
-            endkey = [self.domain, self.billing_period_end.isoformat()]
+            startkey = key+[self.billing_period_start.isoformat()],
+            endkey = key+[self.billing_period_end.isoformat()]
         ).all()
         submitted_user_ids = [item.get('value',{}).get('user_id') for item in data]
         inactive_submitted_user_ids = list(set([user_id for user_id in submitted_user_ids
                                                 if user_id in inactive_user_ids]))
+        
         self.active_users = active_user_ids+inactive_submitted_user_ids
 
     def _get_sms_activities(self, direction):
