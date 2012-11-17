@@ -214,10 +214,11 @@ class HQMonthlyBill(Document):
         itemized = list()
         for user_id in self.active_users:
             user = CommCareUser.get(user_id)
-            all_submissions = get_db().view('reports/submit_history',
+            key = make_form_couch_key(self.domain, user_id=user_id)
+            all_submissions = get_db().view('reports_forms/all_forms',
                 reduce=True,
-                startkey=[self.domain, user_id],
-                endkey=[self.domain, user_id, {}]
+                startkey=key,
+                endkey=key+[{}]
             ).first()
             all_submissions = all_submissions.get('value', 0) if all_submissions else 0
             itemized.append([
