@@ -6,6 +6,7 @@ from corehq.apps.domain.models import Domain
 from corehq.apps.users.models import CommCareUser
 from hqbilling.models import SMSBillable, INCOMING, OUTGOING, HQMonthlyBill, ACTIVE_USER_RATE
 from hqbilling.tasks import generate_monthly_bills
+from dimagi.utils.couch.database import get_db
 
 class TestMonthlyBillFewUsers(TestCase):
 
@@ -23,8 +24,9 @@ class TestMonthlyBillFewUsers(TestCase):
             user.delete()
 
         all_billables = SMSBillable.get_all()
-        for billable in all_billables:
-            billable.delete()
+        # all_billables contains duplicates; only delete each doc once
+        for b_id in set(b._id for b in all_billables):
+            SMSBillable.get_db().delete_doc(b_id)
 
         self.domain = Domain()
         self.domain.name = "ihavefewusers"
