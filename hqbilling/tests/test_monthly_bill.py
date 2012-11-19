@@ -26,7 +26,7 @@ class TestMonthlyBillFewUsers(TestCase):
         all_billables = SMSBillable.get_all()
         # all_billables contains duplicates; only delete each doc once
         for b_id in set(b._id for b in all_billables):
-            get_db().delete_doc(b_id)
+            SMSBillable.get_db().delete_doc(b_id)
 
         self.domain = Domain()
         self.domain.name = "ihavefewusers"
