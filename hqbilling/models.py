@@ -14,6 +14,7 @@ import phonenumbers
 import pytz
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
+from dimagi.utils.modules import to_function
 from dimagi.utils.timezones import utils as tz_utils
 from hqbilling.utils import get_mach_data, format_start_end_suffixes
 
@@ -204,7 +205,7 @@ class HQMonthlyBill(Document):
             itemized.append([
                 billable.billable_date.strftime("%d %b %Y %H:%M"),
                 billable.phone_number,
-                eval(billable.doc_type).api_name(),
+                billable.api_name(),
                 self._fmt_cost(billable.total_billed)
             ])
         return itemized
@@ -872,25 +873,40 @@ class SMSBillable(Document):
         )
 
     @classmethod
+    def _get_doc(cls, startkey, endkey, include_docs=True):
+        doc_class = cls
+        if include_docs:
+            data = get_db().view(cls.couch_view(),
+                reduce=False,
+                include_docs=True,
+                limit=1,
+                startkey=startkey,
+                endkey=endkey
+            ).first()
+            try:
+                doc_class = to_function('hqbilling.models.%s' % data['doc']['doc_type'])
+            except Exception:
+                pass
+        return doc_class.view(doc_class.couch_view(),
+            reduce=False,
+            include_docs=include_docs,
+            startkey=startkey,
+            endkey=endkey
+        )
+
+    @classmethod
     def by_domain(cls, domain, include_docs=True, start=None, end=None):
         key =["domain", domain]
         startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-        return cls.view(cls.couch_view(),
-            reduce=False,
-            include_docs = include_docs,
-            startkey = key+startkey_suffix,
-            endkey = key+endkey_suffix)
+        return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
+            include_docs=include_docs)
 
     @classmethod
     def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None):
         key =["domain direction", domain, direction]
         startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-        return cls.view(cls.couch_view(),
-            reduce=False,
-            include_docs = include_docs,
-            startkey = key+startkey_suffix,
-            endkey = key+endkey_suffix
-        )
+        return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
+            include_docs=include_docs)
 
     @classmethod
     def handle_api_response(cls, message, **kwargs):
