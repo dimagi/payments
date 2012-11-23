@@ -76,7 +76,7 @@ class SMSDetailReport(BillingDetailReport):
                         billable.billable_date.strftime("%B %d, %Y %H:%M:%S")),
                     project,
                     SMS_DIRECTIONS.get(billable.direction),
-                    eval(billable.doc_type).api_name(),
+                    billable.api_name(),
                     self._format_bill_amount(billable.converted_billable_amount),
                     self._format_bill_amount(billable.dimagi_surcharge),
                     self._format_bill_amount(billable.total_billed)
