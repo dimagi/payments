@@ -12,7 +12,6 @@ import urllib2
 from django.utils.safestring import mark_safe
 import phonenumbers
 import pytz
-from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
 from dimagi.utils.modules import to_function
