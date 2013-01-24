@@ -4,7 +4,7 @@ from corehq.apps.reports.views import datespan_default
 
 class BillingInterfaceDispatcher(ReportDispatcher):
     prefix = 'billing_interface'
-    map_name = 'BILLING_REPORT_MAP'
+    map_name = 'BILLING_REPORTS'
 
     @cls_require_superusers
     @datespan_default
