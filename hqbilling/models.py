@@ -12,8 +12,10 @@ import urllib2
 from django.utils.safestring import mark_safe
 import phonenumbers
 import pytz
+from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
+from dimagi.utils.modules import to_function
 from dimagi.utils.timezones import utils as tz_utils
 from hqbilling.utils import get_mach_data, format_start_end_suffixes
 
@@ -204,7 +206,7 @@ class HQMonthlyBill(Document):
             itemized.append([
                 billable.billable_date.strftime("%d %b %Y %H:%M"),
                 billable.phone_number,
-                eval(billable.doc_type).api_name(),
+                billable.api_name(),
                 self._fmt_cost(billable.total_billed)
             ])
         return itemized
@@ -213,10 +215,11 @@ class HQMonthlyBill(Document):
         itemized = list()
         for user_id in self.active_users:
             user = CommCareUser.get(user_id)
-            all_submissions = get_db().view('reports/submit_history',
+            key = make_form_couch_key(self.domain, user_id=user_id)
+            all_submissions = get_db().view('reports_forms/all_forms',
                 reduce=True,
-                startkey=[self.domain, user_id],
-                endkey=[self.domain, user_id, {}]
+                startkey=key,
+                endkey=key+[{}]
             ).first()
             all_submissions = all_submissions.get('value', 0) if all_submissions else 0
             itemized.append([
@@ -238,14 +241,17 @@ class HQMonthlyBill(Document):
         from corehq.apps.users.models import CommCareUser
         active_user_ids = [user.user_id for user in CommCareUser.by_domain(self.domain)]
         inactive_user_ids = [user.user_id for user in CommCareUser.by_domain(self.domain, is_active=False)]
-        data = get_db().view('reports/all_submissions',
+
+        key = make_form_couch_key(self.domain)
+        data = get_db().view('reports_forms/all_forms',
             reduce=False,
-            startkey = [self.domain, self.billing_period_start.isoformat()],
-            endkey = [self.domain, self.billing_period_end.isoformat()]
+            startkey = key+[self.billing_period_start.isoformat()],
+            endkey = key+[self.billing_period_end.isoformat()]
         ).all()
         submitted_user_ids = [item.get('value',{}).get('user_id') for item in data]
         inactive_submitted_user_ids = list(set([user_id for user_id in submitted_user_ids
                                                 if user_id in inactive_user_ids]))
+        
         self.active_users = active_user_ids+inactive_submitted_user_ids
 
     def _get_sms_activities(self, direction):
@@ -805,6 +811,7 @@ class SMSBillable(Document):
         The cost is generated at the time the SMS is sent or received.
     """
     billable_date = DateTimeProperty()
+    modified_date = DateTimeProperty()
     # billable amount is not converted into USD, stays in the billing rate's currency
     # this is the amount that the SMS backend is billing Dimagi
     billable_amount = DecimalProperty()
@@ -841,9 +848,11 @@ class SMSBillable(Document):
             dimagi_rate = DimagiDomainSMSRate.get_default_rate(message.direction)
         self.dimagi_surcharge = dimagi_rate.base_fee if dimagi_rate else 0
 
-    def calculate_rate(self, rate_item, message):
+    def calculate_rate(self, rate_item, message, real_time=True):
         if rate_item:
-            self.billable_date = datetime.datetime.utcnow()
+            if real_time or self.billable_date is None:
+                self.billable_date = datetime.datetime.utcnow()
+            self.modified_date = datetime.datetime.utcnow()
             self.billable_amount = rate_item.billable_amount
             self.conversion_rate = rate_item.conversion_rate
             self.rate_id = rate_item._id
@@ -869,25 +878,40 @@ class SMSBillable(Document):
         )
 
     @classmethod
+    def _get_doc(cls, startkey, endkey, include_docs=True):
+        doc_class = cls
+        if include_docs:
+            data = get_db().view(cls.couch_view(),
+                reduce=False,
+                include_docs=True,
+                limit=1,
+                startkey=startkey,
+                endkey=endkey
+            ).first()
+            try:
+                doc_class = to_function('hqbilling.models.%s' % data['doc']['doc_type'])
+            except Exception:
+                pass
+        return doc_class.view(doc_class.couch_view(),
+            reduce=False,
+            include_docs=include_docs,
+            startkey=startkey,
+            endkey=endkey
+        )
+
+    @classmethod
     def by_domain(cls, domain, include_docs=True, start=None, end=None):
         key =["domain", domain]
         startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-        return cls.view(cls.couch_view(),
-            reduce=False,
-            include_docs = include_docs,
-            startkey = key+startkey_suffix,
-            endkey = key+endkey_suffix)
+        return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
+            include_docs=include_docs)
 
     @classmethod
     def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None):
         key =["domain direction", domain, direction]
         startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-        return cls.view(cls.couch_view(),
-            reduce=False,
-            include_docs = include_docs,
-            startkey = key+startkey_suffix,
-            endkey = key+endkey_suffix
-        )
+        return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
+            include_docs=include_docs)
 
     @classmethod
     def handle_api_response(cls, message, **kwargs):
