@@ -52,7 +52,7 @@ class TaxRateCRUDManager(BaseAdminHQTabularCRUDManager):
 
     def format_property(self, key, property):
         if key == "tax_rate":
-            return "%.2f%%" % property
+            return "%.4f%%" % property
         if key == "country":
             return property if property else "Applies to All Countries"
         return super(TaxRateCRUDManager, self).format_property(key, property)
