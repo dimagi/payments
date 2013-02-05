@@ -448,14 +448,6 @@ class SMSRate(Document, AdminCRUDDocumentMixin):
             logging.error("Could not get conversion rate. Error: %s" % e)
         return decimal.Decimal(rate)
 
-#    def update_item_from_form(self, overwrite=True, **kwargs):
-#        self.direction = kwargs.get('direction', OUTGOING)
-#        if overwrite:
-#            self.currency_code = self.currency_code_setting()
-#            self.last_modified = datetime.datetime.utcnow()
-#            self.base_fee = self.correctly_format_rate(kwargs.get('base_fee', self.default_base_fee))
-#        self.save()
-
     @classmethod
     def get_default(cls, direction=None, **kwargs):
         key = ["type", cls.__name__, direction or OUTGOING] + cls._make_key(**kwargs)
@@ -473,38 +465,6 @@ class SMSRate(Document, AdminCRUDDocumentMixin):
             startkey=key,
             endkey=key+[{}]
         ).first()
-
-
-#    @classmethod
-#    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-#        rate = cls.get_by_match(cls.generate_match_key(**kwargs))
-#        if not rate:
-#            rate = cls()
-#            overwrite = True
-#        rate.update_item_from_form(overwrite, **kwargs)
-#        return rate
-
-#    @staticmethod
-#    def currency_code_setting():
-#        return settings.DEFAULT_CURRENCY
-
-#    @staticmethod
-#    def generate_match_key(**kwargs):
-#        return [str(kwargs.get('direction', 'I'))]
-
-    @staticmethod
-    def correctly_format_rate(rate):
-        # todo fix?
-        if isinstance(rate, str):
-            rate = "%f" % rate
-        return rate
-
-    @staticmethod
-    def correctly_format_code(code):
-        # todo fix?
-        if isinstance(code, float) or isinstance(code, int):
-            code = "%d" % code
-        return code
 
 
 class MachSMSRate(SMSRate):
@@ -525,24 +485,6 @@ class MachSMSRate(SMSRate):
     def billable_amount(self):
         return self.base_fee + self.network_surcharge
 
-#    def update_item_from_form(self, overwrite=True, **kwargs):
-#        self.network_surcharge = self.correctly_format_rate(kwargs.get('network_surcharge', 0))
-#        self.mcc = kwargs.get('mcc')
-#        self.mnc = kwargs.get('mnc')
-#        self.country_code = kwargs.get('country_code')
-#        if overwrite:
-#            self.country = kwargs.get('country', '')
-#            self.network = kwargs.get('network', '')
-#            self.iso = str(kwargs.get('iso', ''))
-#        super(MachSMSRate, self).update_item_from_form(overwrite, **kwargs)
-
-#    @classmethod
-#    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-#        kwargs['country_code'] = cls.correctly_format_code(kwargs.get('country_code', ''))
-#        kwargs['mcc'] = cls.correctly_format_code(kwargs.get('mcc', ''))
-#        kwargs['mnc'] = cls.correctly_format_code(kwargs.get('mnc', ''))
-#        return super(MachSMSRate, cls).get_or_create_new_from_form(overwrite, **kwargs)
-
     @classmethod
     def _make_key(cls, **kwargs):
         return [kwargs.get("country", ""),
@@ -561,10 +503,6 @@ class TropoSMSRate(SMSRate):
     country_code = StringProperty()
 
     _admin_crud_class = TropoSMSRateCRUDManager
-
-#    def update_item_from_form(self, overwrite=True, **kwargs):
-#        self.country_code = self.correctly_format_code(kwargs.get("country_code", ''))
-#        super(TropoSMSRate, self).update_item_from_form(overwrite, **kwargs)
 
     @classmethod
     def _make_key(cls, **kwargs):
