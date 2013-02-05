@@ -1,19 +1,14 @@
-from datetime import datetime
-import decimal
 from django import forms
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.forms.util import ErrorList
-from django.forms.widgets import HiddenInput, Select
 from django.utils.safestring import mark_safe
-import magic
-from openpyxl.shared.exc import InvalidFileException
+gfrom openpyxl.shared.exc import InvalidFileException
 from corehq.apps.crud.models import BaseAdminCRUDForm
 from dimagi.utils.excel import WorkbookJSONReader
 from hqstyle.forms.widgets import BootstrapRadioSelect, \
     BootstrapAddressField, BootstrapPhoneNumberInput
-from hqbilling.models import SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING, \
-    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency
+from hqbilling.models import (SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING,
+    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency)
 
 DIRECTION_CHOICES = ((OUTGOING, SMS_DIRECTIONS.get(OUTGOING),), (INCOMING, SMS_DIRECTIONS.get(INCOMING),))
 DUPE_CHECK_NEW = "new"
