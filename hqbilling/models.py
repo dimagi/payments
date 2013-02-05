@@ -12,11 +12,13 @@ import urllib2
 from django.utils.safestring import mark_safe
 import phonenumbers
 import pytz
+from corehq.apps.crud.models import AdminCRUDDocumentMixin
 from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
 from dimagi.utils.modules import to_function
 from dimagi.utils.timezones import utils as tz_utils
+from hqbilling.crud import SMSRateCRUDManager, DimagiDomainSMSRateCRUDManager, MachSMSRateCRUDManager, TropoSMSRateCRUDManager, BillableCurrencyCRUDManager, TaxRateCRUDManager
 from hqbilling.utils import get_mach_data, format_start_end_suffixes
 
 DEFAULT_BASE = 0.02
@@ -331,59 +333,14 @@ class HQMonthlyBill(Document):
         return bill
 
 
-class UpdatableItemMixin(object):
-    """
-        This is what the item updating reports will use to display/edit an item
-        #todo use the genericized version in dimagi-utils
-    """
-    def __getattr__(self, name):
-        if name == 'get_id':
-            return ""
-        raise AttributeError(name)
-
-    @property
-    def column_list(self):
-        """
-            Returns a list of properties that are going to be the columns of the row outputted
-            in as_row.
-        """
-        raise NotImplementedError
-
-    @property
-    def as_row(self):
-        keys = self.column_list
-        row = []
-        for key in keys:
-            property = getattr(self, key)
-            row.append(self._format_property(key, property))
-        row.append('<a href="#updateRateModal" class="btn" onclick="rateUpdateManager.updateRate(this)" data-rateid="%s" data-toggle="modal">Edit</a>' % self.get_id)
-        return row
-
-    def _format_property(self, key, property):
-        return property
-
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        raise NotImplementedError
-
-    @classmethod
-    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-        raise NotImplementedError
-
-    @staticmethod
-    def couch_view():
-        return NotImplementedError
-
-
-class BillableCurrency(Document, UpdatableItemMixin):
+class BillableCurrency(Document, AdminCRUDDocumentMixin):
     currency_code = StringProperty()
     symbol = StringProperty()
     conversion = DecimalProperty()
     source = StringProperty()
     last_updated = DateTimeProperty()
 
-    @property
-    def column_list(self):
-        return ["currency_code", "symbol", "conversion", "last_updated"]
+    _admin_crud_class = BillableCurrencyCRUDManager
 
     @property
     def safe_symbol(self):
@@ -393,29 +350,8 @@ class BillableCurrency(Document, UpdatableItemMixin):
     def safe_conversion(self):
         return self.conversion if self.conversion != 0 else 1
 
-    def _format_property(self, key, property):
-        if isinstance(property, datetime.datetime):
-            return property.strftime("%d %B %Y at %H:%M")
-        if key == 'conversion':
-            if settings.DEFAULT_CURRENCY != self.currency_code:
-                return "%s %s : 1 %s" % (property, settings.DEFAULT_CURRENCY, self.currency_code)
-            return "Default Currency"
-        if isinstance(property, decimal.Decimal):
-            property = property.quantize(decimal.Decimal(10) ** -4)
-            return "%s" % property
-        return super(BillableCurrency, self)._format_property(key, property)
-
-    def update_conversion_rate(self):
-        self.last_updated = datetime.datetime.utcnow()
-        default_currency = settings.DEFAULT_CURRENCY.upper()
-        if self.currency_code == default_currency:
-            self.conversion = 1.0
-            self.source = "default"
-            return
-
-        conversion_url = "http://www.google.com/ig/calculator?hl=en&q=1%s=?%s" %\
-                         (self.currency_code, default_currency)
-
+    def set_live_conversion_rate(self, from_currency, to_currency):
+        conversion_url = "http://www.google.com/ig/calculator?hl=en&q=1%s=?%s" % (from_currency, to_currency)
         try:
             data = urllib2.urlopen(conversion_url).read()
             # AGH GOOGLE WHY DON'T YOU RETURN VALID JSON??? ?#%!%!%@#
@@ -429,25 +365,17 @@ class BillableCurrency(Document, UpdatableItemMixin):
             conversion_url = "ERROR: %s, %s" % (e, conversion_url)
         self.source = conversion_url
 
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        symbol = kwargs.get('symbol', '')
-        currency_code = kwargs.get('currency_code', '')
-        self.currency_code = currency_code
-        self.symbol = symbol
-        self.update_conversion_rate()
-        self.save()
-
-    @classmethod
-    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-        currency_code = kwargs.get('currency_code', '')
-        currency = cls.get_existing_or_new_by_code(currency_code)
-        currency.update_item_from_form(**kwargs)
-        return currency
+#    @classmethod
+#    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
+#        currency_code = kwargs.get('currency_code', '')
+#        currency = cls.get_existing_or_new_by_code(currency_code)
+#        currency.update_item_from_form(**kwargs)
+#        return currency
 
     @classmethod
     def get_by_code(cls, currency_code, include_docs=True):
         key = [currency_code.upper()]
-        return cls.view(cls.couch_view(),
+        return cls.view("hqbilling/active_currency",
             reduce=False,
             include_docs=include_docs,
             startkey=key,
@@ -456,7 +384,7 @@ class BillableCurrency(Document, UpdatableItemMixin):
 
     @classmethod
     def get_all(cls, include_docs=True):
-        return cls.view(cls.couch_view(),
+        return cls.view("hqbilling/active_currency",
             reduce=False,
             include_docs=include_docs
         )
@@ -470,28 +398,15 @@ class BillableCurrency(Document, UpdatableItemMixin):
             currency.save()
         return currency
 
-    @staticmethod
-    def couch_view():
-        return "hqbilling/active_currency"
 
-
-class TaxRateByCountry(Document, UpdatableItemMixin):
+class TaxRateByCountry(Document, AdminCRUDDocumentMixin):
     """
         Holds the tax rate by country name (case insensitive).
     """
     country = StringProperty(default="")
-    tax_rate = DecimalProperty()
+    tax_rate = DecimalProperty(default=0)
 
-    @property
-    def column_list(self):
-        return ["country", "tax_rate"]
-
-    def _format_property(self, key, property):
-        if key == "tax_rate":
-            return "%.2f%%" % property
-        if key == "country":
-            return property if property else "Applies to All Countries"
-        return super(TaxRateByCountry, self)._format_property(key, property)
+    _admin_crud_class = TaxRateCRUDManager
 
     @classmethod
     def get_by_country(cls, country, include_docs=True):
@@ -502,43 +417,18 @@ class TaxRateByCountry(Document, UpdatableItemMixin):
             endkey=[country, {}]
         )
 
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        tax_rate = kwargs.get('tax_rate', 0)
-        self.tax_rate = tax_rate
-        self.save()
-
-    @classmethod
-    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-        country = kwargs.get('country', '')
-        tax = cls.get_by_country(country).first()
-        if not tax:
-            tax = cls(country=country)
-            tax.save()
-        tax.update_item_from_form(**kwargs)
-        return tax
-
     @classmethod
     def get_default(cls, include_docs=True):
         return cls.get_by_country("", include_docs).first()
 
-    @staticmethod
-    def couch_view():
-        return "hqbilling/tax_rates"
 
-
-class SMSRate(Document, UpdatableItemMixin):
+class SMSRate(Document, AdminCRUDDocumentMixin):
     direction = StringProperty()
     last_modified = DateTimeProperty()
     currency_code = StringProperty(default=settings.DEFAULT_CURRENCY)
     base_fee = DecimalProperty()
 
-    @property
-    def currency_character(self):
-        return "$"
-
-    @property
-    def column_list(self):
-        return ["direction", "base_fee"]
+    _admin_crud_class = SMSRateCRUDManager
 
     @property
     def default_base_fee(self):
@@ -558,57 +448,60 @@ class SMSRate(Document, UpdatableItemMixin):
             logging.error("Could not get conversion rate. Error: %s" % e)
         return decimal.Decimal(rate)
 
-    def _format_property(self, key, property):
-        if key == "direction":
-            return SMS_DIRECTIONS[property]
-        if isinstance(property, decimal.Decimal):
-            property = property.quantize(decimal.Decimal(10) ** -3)
-            return "%s %s" % (self.currency_character, property)
-        return super(SMSRate, self)._format_property(key, property)
-
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        self.direction = kwargs.get('direction', OUTGOING)
-        if overwrite:
-            self.currency_code = self.currency_code_setting()
-            self.last_modified = datetime.datetime.utcnow()
-            self.base_fee = self.correctly_format_rate(kwargs.get('base_fee', self.default_base_fee))
-        self.save()
+#    def update_item_from_form(self, overwrite=True, **kwargs):
+#        self.direction = kwargs.get('direction', OUTGOING)
+#        if overwrite:
+#            self.currency_code = self.currency_code_setting()
+#            self.last_modified = datetime.datetime.utcnow()
+#            self.base_fee = self.correctly_format_rate(kwargs.get('base_fee', self.default_base_fee))
+#        self.save()
 
     @classmethod
-    def get_by_match(cls, match_key, include_docs=True):
-        rate = cls.view(cls.couch_view(),
+    def get_default(cls, direction=None, **kwargs):
+        key = ["type", cls.__name__, direction or OUTGOING] + cls._make_key(**kwargs)
+        return cls._get_by_key(key)
+
+    @classmethod
+    def _make_key(cls, **kwargs):
+        return []
+
+    @classmethod
+    def _get_by_key(cls, key, include_docs=True):
+        return cls.view("hqbilling/sms_rates",
             reduce=False,
             include_docs=include_docs,
-            startkey=match_key,
-            endkey=match_key+[{}],
+            startkey=key,
+            endkey=key+[{}]
         ).first()
-        return rate
 
-    @classmethod
-    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-        rate = cls.get_by_match(cls.generate_match_key(**kwargs))
-        if not rate:
-            rate = cls()
-            overwrite = True
-        rate.update_item_from_form(overwrite, **kwargs)
-        return rate
 
-    @staticmethod
-    def currency_code_setting():
-        return settings.DEFAULT_CURRENCY
+#    @classmethod
+#    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
+#        rate = cls.get_by_match(cls.generate_match_key(**kwargs))
+#        if not rate:
+#            rate = cls()
+#            overwrite = True
+#        rate.update_item_from_form(overwrite, **kwargs)
+#        return rate
 
-    @staticmethod
-    def generate_match_key(**kwargs):
-        return [str(kwargs.get('direction', 'I'))]
+#    @staticmethod
+#    def currency_code_setting():
+#        return settings.DEFAULT_CURRENCY
+
+#    @staticmethod
+#    def generate_match_key(**kwargs):
+#        return [str(kwargs.get('direction', 'I'))]
 
     @staticmethod
     def correctly_format_rate(rate):
+        # todo fix?
         if isinstance(rate, str):
             rate = "%f" % rate
         return rate
 
     @staticmethod
     def correctly_format_code(code):
+        # todo fix?
         if isinstance(code, float) or isinstance(code, int):
             code = "%d" % code
         return code
@@ -626,66 +519,39 @@ class MachSMSRate(SMSRate):
     network = StringProperty()
     network_surcharge = DecimalProperty()
 
-    @property
-    def currency_character(self):
-        return "&euro;"
-
-    @property
-    def column_list(self):
-        return ["direction",
-                "country",
-                "network",
-                "iso",
-                "country_code",
-                "mcc",
-                "mnc",
-                "base_fee",
-                "network_surcharge"]
+    _admin_crud_class = MachSMSRateCRUDManager
 
     @property
     def billable_amount(self):
         return self.base_fee + self.network_surcharge
 
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        self.network_surcharge = self.correctly_format_rate(kwargs.get('network_surcharge', 0))
-        self.mcc = kwargs.get('mcc')
-        self.mnc = kwargs.get('mnc')
-        self.country_code = kwargs.get('country_code')
-        if overwrite:
-            self.country = kwargs.get('country', '')
-            self.network = kwargs.get('network', '')
-            self.iso = str(kwargs.get('iso', ''))
-        super(MachSMSRate, self).update_item_from_form(overwrite, **kwargs)
+#    def update_item_from_form(self, overwrite=True, **kwargs):
+#        self.network_surcharge = self.correctly_format_rate(kwargs.get('network_surcharge', 0))
+#        self.mcc = kwargs.get('mcc')
+#        self.mnc = kwargs.get('mnc')
+#        self.country_code = kwargs.get('country_code')
+#        if overwrite:
+#            self.country = kwargs.get('country', '')
+#            self.network = kwargs.get('network', '')
+#            self.iso = str(kwargs.get('iso', ''))
+#        super(MachSMSRate, self).update_item_from_form(overwrite, **kwargs)
+
+#    @classmethod
+#    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
+#        kwargs['country_code'] = cls.correctly_format_code(kwargs.get('country_code', ''))
+#        kwargs['mcc'] = cls.correctly_format_code(kwargs.get('mcc', ''))
+#        kwargs['mnc'] = cls.correctly_format_code(kwargs.get('mnc', ''))
+#        return super(MachSMSRate, cls).get_or_create_new_from_form(overwrite, **kwargs)
 
     @classmethod
-    def get_or_create_new_from_form(cls, overwrite=True, **kwargs):
-        kwargs['country_code'] = cls.correctly_format_code(kwargs.get('country_code', ''))
-        kwargs['mcc'] = cls.correctly_format_code(kwargs.get('mcc', ''))
-        kwargs['mnc'] = cls.correctly_format_code(kwargs.get('mnc', ''))
-        return super(MachSMSRate, cls).get_or_create_new_from_form(overwrite, **kwargs)
-
-    @staticmethod
-    def currency_code_setting():
-        return "EUR"
-
-    @staticmethod
-    def couch_view():
-        return "hqbilling/mach_rates"
-
-    @staticmethod
-    def generate_match_key(**kwargs):
-        return [kwargs.get('direction', OUTGOING),
-                kwargs.get('country', ''),
-                kwargs.get('network', '')]
+    def _make_key(cls, **kwargs):
+        return [kwargs.get("country", ""),
+                kwargs.get("network", "")]
 
     @classmethod
     def get_by_number(cls, direction, mach_number, include_docs=True):
-        match_key = cls.generate_match_key(**dict(
-            direction=direction,
-            network=mach_number.network,
-            country=mach_number.country
-        ))
-        return cls.get_by_match(match_key, include_docs)
+        key = ["type", cls.__name__, direction, mach_number.network, mach_number.country]
+        return cls._get_by_key(key)
 
 
 class TropoSMSRate(SMSRate):
@@ -694,48 +560,19 @@ class TropoSMSRate(SMSRate):
     """
     country_code = StringProperty()
 
-    @property
-    def column_list(self):
-        return ["direction",
-                "country_code",
-                "base_fee"]
+    _admin_crud_class = TropoSMSRateCRUDManager
 
-    def _format_property(self, key, property):
-        if key == "country_code":
-            return property if property else "Applies to All Non-Matching Projects"
-        return super(TropoSMSRate, self)._format_property(key, property)
-
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        self.country_code = self.correctly_format_code(kwargs.get("country_code", ''))
-        super(TropoSMSRate, self).update_item_from_form(overwrite, **kwargs)
+#    def update_item_from_form(self, overwrite=True, **kwargs):
+#        self.country_code = self.correctly_format_code(kwargs.get("country_code", ''))
+#        super(TropoSMSRate, self).update_item_from_form(overwrite, **kwargs)
 
     @classmethod
-    def get_default_rate(cls, direction, include_docs=True):
-        key = [direction, ""]
-        return cls.view(cls.couch_view(),
-            reduce=False,
-            include_docs=include_docs,
-            startkey=key,
-            endkey=key+[{}]
-        )
-
-    @staticmethod
-    def couch_view():
-        return "hqbilling/tropo_rates"
-
-    @staticmethod
-    def generate_match_key(**kwargs):
-        return [kwargs.get('direction', OUTGOING),
-                kwargs.get('country_code', '')]
+    def _make_key(cls, **kwargs):
+        return [kwargs.get('country_code', '')]
 
 
 class UnicelSMSRate(SMSRate):
-    """
-        This is a billing rate for SMSs sent via Unicel.
-    """
-    @staticmethod
-    def couch_view():
-        return "hqbilling/unicel_rates"
+    pass
 
 
 class DimagiDomainSMSRate(SMSRate):
@@ -744,34 +581,11 @@ class DimagiDomainSMSRate(SMSRate):
     """
     domain = StringProperty()
 
-    @property
-    def column_list(self):
-        return ["domain",
-                "direction",
-                "base_fee"]
-
-    def _format_property(self, key, property):
-        if key == "domain":
-            return property if property else "Applies to All Non-Matching Projects"
-        return super(DimagiDomainSMSRate, self)._format_property(key, property)
-
-    def update_item_from_form(self, overwrite=True, **kwargs):
-        self.domain = self.correctly_format_code(kwargs.get("domain", ''))
-        super(DimagiDomainSMSRate, self).update_item_from_form(overwrite, **kwargs)
+    _admin_crud_class = DimagiDomainSMSRateCRUDManager
 
     @classmethod
-    def get_default_rate(cls, direction):
-        match_key = cls.generate_match_key(**dict(direction=direction, domain=''))
-        return cls.get_by_match(match_key)
-
-    @staticmethod
-    def couch_view():
-        return "hqbilling/dimagi_rates"
-
-    @staticmethod
-    def generate_match_key(**kwargs):
-        return [kwargs.get('direction', OUTGOING),
-                kwargs.get('domain', '')]
+    def _make_key(cls, **kwargs):
+        return [kwargs.get('domain', "")]
 
 
 class MachPhoneNumber(Document):

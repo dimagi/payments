@@ -1,10 +1,9 @@
 from django.core.urlresolvers import reverse
 from corehq.apps.reports.standard import DatespanMixin
-from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DTSortType, DataTablesColumnGroup
+from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DataTablesColumnGroup
 from corehq.apps.reports.generic import GenericTabularReport
-from corehq.apps.reports import util as report_utils
 from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, SelectSMSBillableDomainsField
-from hqbilling.models import MachSMSBillable, TropoSMSBillable, UnicelSMSBillable, HQMonthlyBill, SMS_DIRECTIONS, TaxRateByCountry, SMSBillable
+from hqbilling.models import HQMonthlyBill, SMS_DIRECTIONS, SMSBillable
 from hqbilling.reports import HQBillingReport
 
 class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):

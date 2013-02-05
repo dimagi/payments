@@ -1,3 +1,4 @@
+from corehq.apps.crud.views import BaseAdminCRUDFormView
 from corehq.apps.domain.models import Domain
 from dimagi.utils.modules import to_function
 from django.conf import settings
@@ -103,6 +104,13 @@ def bill_status_update(request, bill_id, status):
         success=success,
         bill_id=bill_id
     )))
+
+class BillingAdminCRUDFormView(BaseAdminCRUDFormView):
+    base_loc = "hqbilling.forms"
+
+    def is_form_class_valid(self, form_class):
+        # todo
+        return True
 
 
 

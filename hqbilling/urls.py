@@ -1,16 +1,25 @@
 from django.conf.urls.defaults import *
 from hqbilling.dispatcher import BillingInterfaceDispatcher
+from hqbilling.views import BillingAdminCRUDFormView
 
 urlpatterns = patterns('hqbilling.views',
     url(r'^$', "default_billing_report", name="billing_default"),
     url(BillingInterfaceDispatcher.pattern(), BillingInterfaceDispatcher.as_view(),
         name=BillingInterfaceDispatcher.name()
     ),
-#    url(r'^delete/all/', "deltestdata"),
+    url(r'^form/(?P<form_type>[\w_]+)/(?P<action>[(update)|(new)|(delete)]+)/((?P<item_id>[\w_]+)/)?$',
+        BillingAdminCRUDFormView.as_view(), name="billing_item_form"),
 
-    url(r'^forms/(?P<form>[\w_]+)/(?P<item_type>[\w_]+)/(?P<item_id>[\w_]+)/$', 'updatable_item_form',
-        name='billing_update_item_form'),
-    url(r'^forms/(?P<form>[\w_]+)/$', 'updatable_item_form', name='billing_new_item_form'),
+
+
+    #    url(r'^delete/all/', "deltestdata"),
+
+    #    url(r'^forms/(?P<form>[\w_]+)/(?P<item_type>[\w_]+)/(?P<item_id>[\w_]+)/$', 'updatable_item_form',
+    #        name='billing_update_item_form'),
+    #    url(r'^forms/(?P<form>[\w_]+)/$', 'updatable_item_form', name='billing_new_item_form'),
+
+
+
 
     url(r'^bill/invoice/(?P<bill_id>[\w-]+)/$', 'bill_invoice',
         name='billing_invoice'),

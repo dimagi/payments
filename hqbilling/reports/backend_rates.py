@@ -1,23 +1,62 @@
 from django.contrib import messages
+from django.utils.safestring import mark_safe
 from corehq.apps.reports.datatables import DataTablesHeader, DataTablesColumn
 from hqbilling.forms import MachExcelFileUploadForm, MachSMSRateForm, TropoSMSRateForm, \
     UnicelSMSRateForm, DimagiSMSRateForm
 from hqbilling.models import MachSMSRate, TropoSMSRate, \
     DimagiDomainSMSRate, UnicelSMSRate
-from hqbilling.reports import UpdatableItem
+from hqbilling.reports import BaseBillingAdminInterface
 
-class MachRateReport(UpdatableItem):
+class BaseSMSRateReport(BaseBillingAdminInterface):
+#    fix_left_col = True
+
+    @property
+    def rates(self):
+        key = ["all", self.document_class.__name__]
+        data = self.document_class.view('hqbilling/sms_rates',
+            reduce=False,
+            include_docs=True,
+            startkey=key,
+            endkey=key+[{}]
+        ).all()
+        return data
+
+    @property
+    def rows(self):
+        rows = []
+        for rate in self.rates:
+            rows.append(rate.admin_crud.row)
+        return rows
+
+
+class MachRateReport(BaseSMSRateReport):
     slug = "mach_rates"
     name = "MACH Rates"
 
+    crud_item_type = "Mach Rate"
+    document_class = MachSMSRate
     form_class = MachSMSRateForm
-    item_class = MachSMSRate
+
     report_template_path = "hqbilling/reports/mach_rate_report.html"
+
+    detailed_description = mark_safe("""<p>The currency for Mach Rates is <strong>&euro; EUR</strong></p>
+        <p>The base rate for Mach is &euro; 0.005.</p>
+        <p>You may upload Mach rates in bulk using the following form:
+            <a href="#bulkUploadRateModal"
+                class="btn" data-toggle="modal">Upload Rates in Bulk</a>
+        </p>""")
 
     def _update_initial_context(self):
         if self.request.method == 'POST':
             self.asynchronous = False
         super(MachRateReport, self)._update_initial_context()
+
+    _bulk_upload_form = None
+    @property
+    def bulk_upload_form(self):
+        if self._bulk_upload_form is None:
+            self._bulk_upload_form = MachExcelFileUploadForm()
+        return self._bulk_upload_form
 
     @property
     def report_context(self):
@@ -27,6 +66,9 @@ class MachRateReport(UpdatableItem):
             if bulk_upload_form.is_valid():
                 bulk_upload_form.save()
                 bulk_upload_form = MachExcelFileUploadForm()
+                messages.success(self.request, mark_safe('Bulk Upload was successful<br />' \
+                                                         '<a class="btn btn-success" href="%s">Refresh ' \
+                                                         'to View New Rates</a>' % self.get_url()))
             else:
                 messages.error(self.request, "Bulk Upload did not work.")
         else:
@@ -51,14 +93,15 @@ class MachRateReport(UpdatableItem):
         return headers
 
     @property
-    def status_message(self):
-        return "Currency is in <strong>&euro; EUR</strong>."
+    def rows(self):
+        return super(MachRateReport, self).rows
 
-class TropoRateReport(UpdatableItem):
+class TropoRateReport(BaseSMSRateReport):
     slug = "tropo_rates"
     name = "Tropo Rates"
+
+    document_class = TropoSMSRate
     form_class = TropoSMSRateForm
-    item_class = TropoSMSRate
 
     @property
     def headers(self):
@@ -70,11 +113,13 @@ class TropoRateReport(UpdatableItem):
         )
         return headers
 
-class UnicelRateReport(UpdatableItem):
+
+class UnicelRateReport(BaseSMSRateReport):
     slug = "unicel_rates"
     name = "Unicel Rates"
+
+    document_class = UnicelSMSRate
     form_class = UnicelSMSRateForm
-    item_class = UnicelSMSRate
 
     @property
     def headers(self):
@@ -85,11 +130,13 @@ class UnicelRateReport(UpdatableItem):
         )
         return headers
 
-class DimagiRateReport(UpdatableItem):
+
+class DimagiRateReport(BaseSMSRateReport):
     slug = "dimagi_rates"
     name = "Dimagi Surcharges Per Domain"
+
+    document_class = DimagiDomainSMSRate
     form_class = DimagiSMSRateForm
-    item_class = DimagiDomainSMSRate
 
     @property
     def headers(self):
