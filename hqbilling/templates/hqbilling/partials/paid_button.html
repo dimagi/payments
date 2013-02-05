@@ -1,0 +1,10 @@
+<a href="#changePaymentStatusModal"
+   onclick="payment_status.updateModalForm('{{ bill_id }}')"
+   id="update-{{ bill_id }}"
+   data-toggle="modal"
+   class="btn {{ button_class }}"
+   data-domain="{{ domain }}"
+   data-billingstart="{{ billing_start }}"
+   data-billingend="{{ billing_end }}">
+    {{ payment_status_text }}
+</a>

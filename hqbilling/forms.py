@@ -2,7 +2,7 @@ from django import forms
 from django.conf import settings
 from django.forms.util import ErrorList
 from django.utils.safestring import mark_safe
-gfrom openpyxl.shared.exc import InvalidFileException
+from openpyxl.shared.exc import InvalidFileException
 from corehq.apps.crud.models import BaseAdminCRUDForm
 from dimagi.utils.excel import WorkbookJSONReader
 from hqstyle.forms.widgets import BootstrapRadioSelect, \

@@ -11,6 +11,8 @@ class BillableCurrencyReport(BaseBillingAdminInterface):
     document_class = BillableCurrency
     form_class = BillableCurrencyUpdateForm
 
+    description = "Currencies that we can send bills in and that project administrators can choose when adding domain details."
+
     @property
     def headers(self):
         headers = DataTablesHeader(
@@ -40,6 +42,8 @@ class TaxRateReport(BaseBillingAdminInterface):
 
     document_class = TaxRateByCountry
     form_class = TaxRateUpdateForm
+
+    description = "Tax rates we want to apply to bill totals based on country."
 
     @property
     def headers(self):

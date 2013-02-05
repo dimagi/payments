@@ -8,7 +8,6 @@ from hqbilling.models import MachSMSRate, TropoSMSRate, \
 from hqbilling.reports import BaseBillingAdminInterface
 
 class BaseSMSRateReport(BaseBillingAdminInterface):
-#    fix_left_col = True
 
     @property
     def rates(self):
@@ -103,6 +102,10 @@ class TropoRateReport(BaseSMSRateReport):
     document_class = TropoSMSRate
     form_class = TropoSMSRateForm
 
+    detailed_description = mark_safe("""
+        <p>Tropo rates are in USD.</p>
+    """)
+
     @property
     def headers(self):
         headers = DataTablesHeader(
@@ -121,6 +124,10 @@ class UnicelRateReport(BaseSMSRateReport):
     document_class = UnicelSMSRate
     form_class = UnicelSMSRateForm
 
+    detailed_description = mark_safe("""
+        <p>Tropo rates are in USD.</p>
+    """)
+
     @property
     def headers(self):
         headers = DataTablesHeader(
@@ -137,6 +144,12 @@ class DimagiRateReport(BaseSMSRateReport):
 
     document_class = DimagiDomainSMSRate
     form_class = DimagiSMSRateForm
+
+    detailed_description = mark_safe("""
+        <p>This fee is added on top of any SMS provider's rates.</p>
+    """)
+
+    description = "Dimagi's fee applied on top of other SMS backend fees."
 
     @property
     def headers(self):

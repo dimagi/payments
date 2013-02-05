@@ -34,7 +34,7 @@ def update_currency_conversion():
     relevant_codes = list(set(relevant_codes))
     for code in relevant_codes:
         currency = BillableCurrency.get_existing_or_new_by_code(code)
-        currency.update_conversion_rate()
+        currency.set_live_conversion_rate(currency.currency_code, settings.DEFAULT_CURRENCY.upper())
         currency.save()
 
 @task
@@ -63,6 +63,7 @@ def update_mach_billables():
                     mach_number = MachPhoneNumber.get_by_number(phone_number, data)
                     rate_item = MachSMSRate.get_by_number(billable.direction, mach_number)
                     if rate_item:
+                        # todo fix this guy.
                         billable.update_item_from_form(rate_item)
                         billable.save()
                     billable.update_mach_delivery_status(data)
