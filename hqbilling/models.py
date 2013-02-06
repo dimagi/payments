@@ -117,7 +117,6 @@ class HQMonthlyBill(Document):
 
     @property
     def html_dimagi_address(self):
-        print "getting address"
         country = self.domain_object.billing_address.country
         address = render_to_string("hqbilling/partials/dimagi_address.html", {
             'is_india':  country and country.lower() == 'india',
@@ -539,12 +538,15 @@ class SMSBillable(Document):
     """
     billable_date = DateTimeProperty()
     modified_date = DateTimeProperty()
+
     # billable amount is not converted into USD, stays in the billing rate's currency
     # this is the amount that the SMS backend is billing Dimagi
     billable_amount = DecimalProperty()
+
     # conversion rate at the time of creating the billable item
     # this applies only to the billable amount
     conversion_rate = DecimalProperty()
+
     # the dimagi surcharge is always in USD and is the amount we may or may not add on top of the billable amount
     # based on the domain used
     dimagi_surcharge = DecimalProperty(default=0)
@@ -629,14 +631,21 @@ class SMSBillable(Document):
 
     @classmethod
     def by_domain(cls, domain, include_docs=True, start=None, end=None):
-        key =["type domain", cls.__name__, domain]
+        if cls == SMSBillable:
+            key = ["domain", domain]
+        else:
+            key =["type domain", cls.__name__, domain]
+
         startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
         return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
             include_docs=include_docs)
 
     @classmethod
     def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None):
-        key =["type domain direction", cls.__name__, domain, direction]
+        if cls == SMSBillable:
+            key = ["domain direction", domain, direction]
+        else:
+            key =["type domain direction", cls.__name__, domain, direction]
         startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
         return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
             include_docs=include_docs)
