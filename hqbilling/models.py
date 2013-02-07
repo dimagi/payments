@@ -37,15 +37,21 @@ class HQMonthlyBill(Document):
         starting at midnight on the first of each month.
     """
     domain = StringProperty()
+
     billing_period_start = DateTimeProperty()
     billing_period_end = DateTimeProperty()
     date_generated = DateTimeProperty()
+
     incoming_sms_billables = ListProperty()
     incoming_sms_billed = DecimalProperty(default=0)
+
     outgoing_sms_billables = ListProperty()
     outgoing_sms_billed = DecimalProperty(default=0)
+
+    # these are currently not being used...waiting on pricing scheme to emerge
     active_users = ListProperty()
     active_users_billed = DecimalProperty(default=0)
+
     paid = BooleanProperty(default=False)
 
     @property
@@ -126,13 +132,13 @@ class HQMonthlyBill(Document):
     @property
     def invoice_items(self):
         items = list()
-        if self.active_users_billed > 0:
-            items.append(dict(
-                desc="CommCare HQ Hosting Fees",
-                qty="%s users" % len(self.active_users),
-                unit_price=self._fmt_cost(decimal.Decimal(ACTIVE_USER_RATE)),
-                billed=self._fmt_cost(self.active_users_billed)
-            ))
+#        if self.active_users_billed > 0:
+#            items.append(dict(
+#                desc="CommCare HQ Hosting Fees",
+#                qty="%s users" % len(self.active_users),
+#                unit_price=self._fmt_cost(decimal.Decimal(ACTIVE_USER_RATE)),
+#                billed=self._fmt_cost(self.active_users_billed)
+#            ))
         if self.incoming_sms_billed > 0:
             items.append(dict(
                 desc="SMS Inbound",
@@ -176,11 +182,11 @@ class HQMonthlyBill(Document):
                     total=self._fmt_cost(self.outgoing_sms_billed)
                 )
             ))
-        if self.active_users_billed > 0:
-            itemized.update(dict(
-                users=self._itemized_users(),
-                users_total=self._fmt_cost(self.total_billed)
-            ))
+#        if self.active_users_billed > 0:
+#            itemized.update(dict(
+#                users=self._itemized_users(),
+#                users_total=self._fmt_cost(self.total_billed)
+#            ))
         return itemized
 
     def _itemized_sms(self, direction):
@@ -188,7 +194,7 @@ class HQMonthlyBill(Document):
         sms_ids = getattr(self, "%s_sms_billables" % direction_name)
         itemized = list()
         for sms_id in sms_ids:
-            billable = SMSBillable.get(sms_id)
+            billable = SMSBillable.get_correct_wrap(sms_id)
             itemized.append([
                 billable.billable_date.strftime("%d %b %Y %H:%M"),
                 billable.phone_number,
@@ -275,9 +281,9 @@ class HQMonthlyBill(Document):
         self._get_sms_activities(INCOMING)
         self._get_sms_activities(OUTGOING)
 
-        self._get_all_active_and_submitted_users()
-        if len(self.active_users) > 20:
-            self.active_users_billed = len(self.active_users) * ACTIVE_USER_RATE
+#        self._get_all_active_and_submitted_users()
+#        if len(self.active_users) > 20:
+#            self.active_users_billed = len(self.active_users) * ACTIVE_USER_RATE
 
     @classmethod
     def get_bills(cls, domain, prefix="start", paid=None, start=None, end=None, include_docs=True):
@@ -303,8 +309,7 @@ class HQMonthlyBill(Document):
         bill.new_bill(billing_range)
 
         if bill.incoming_sms_billed > 0 or \
-           bill.outgoing_sms_billed > 0 or \
-           bill.active_users_billed > 0:
+           bill.outgoing_sms_billed > 0:
             # save only the bills with costs attached so that there isn't a long list
             # of non-actionable bills at the end
             bill.save()
@@ -346,10 +351,11 @@ class BillableCurrency(Document, AdminCRUDDocumentMixin):
             conversion_url = "ERROR: %s, %s" % (e, conversion_url)
         self.source = conversion_url
 
+    _currency_view = "hqbilling/currencies"
     @classmethod
     def get_by_code(cls, currency_code, include_docs=True):
         key = [currency_code.upper()]
-        return cls.view("hqbilling/active_currency",
+        return cls.view(cls._currency_view,
             reduce=False,
             include_docs=include_docs,
             startkey=key,
@@ -358,7 +364,7 @@ class BillableCurrency(Document, AdminCRUDDocumentMixin):
 
     @classmethod
     def get_all(cls, include_docs=True):
-        return cls.view("hqbilling/active_currency",
+        return cls.view(cls._currency_view,
             reduce=False,
             include_docs=include_docs
         )
@@ -596,59 +602,52 @@ class SMSBillable(Document):
         self.phone_number = message.phone_number
 
     @classmethod
-    def get_all(cls, include_docs=True):
-        #todo check if this is actually used?
-        key = ["type domain", cls.__name__]
-        return cls.view("hqbilling/all_billable_items",
-            reduce=False,
-            include_docs = include_docs,
-            startkey=key,
-            endkey=key+[{}]
-        )
-
-    @classmethod
-    def _get_doc(cls, startkey, endkey, include_docs=True):
-        doc_class = cls
-        if include_docs:
-            #todo this looks wonky. Fix.
-            data = get_db().view("hqbilling/all_billable_items",
-                reduce=False,
-                include_docs=True,
-                limit=1,
-                startkey=startkey,
-                endkey=endkey
-            ).first()
-            try:
-                doc_class = to_function('hqbilling.models.%s' % data['doc']['doc_type'])
-            except Exception:
-                pass
-        return doc_class.view("hqbilling/all_billable_items",
-            reduce=False,
+    def _get_docs(cls, startkey, endkey, include_docs=True):
+        return cls.view("hqbilling/sms_billables",
             include_docs=include_docs,
+            reduce=False,
             startkey=startkey,
             endkey=endkey
-        )
+        ).all()
+
+    @classmethod
+    def _get_relevant_classes(cls):
+        return cls.__subclasses__() if cls == SMSBillable else [cls]
+
+    @classmethod
+    def get_correct_wrap(cls, docid):
+        data = cls.get_db().get(docid)
+        try:
+            correct_class = to_function("hqbilling.models.%s" % data['doc_type'])
+        except Exception:
+            correct_class = cls
+        return correct_class.get(docid)
+
+    @classmethod
+    def get_all(cls, include_docs=True):
+        data = []
+        for c in cls._get_relevant_classes():
+            key = ["type domain", c.__name__]
+            data.extend(c._get_docs(key, key+[{}], include_docs=include_docs))
+        return data
 
     @classmethod
     def by_domain(cls, domain, include_docs=True, start=None, end=None):
-        if cls == SMSBillable:
-            key = ["domain", domain]
-        else:
-            key =["type domain", cls.__name__, domain]
-
-        startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-        return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
-            include_docs=include_docs)
+        data = []
+        for c in cls._get_relevant_classes():
+            key = ["type domain", c.__name__, domain]
+            startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
+            data.extend(c._get_docs(key+startkey_suffix, key+endkey_suffix, include_docs=include_docs))
+        return data
 
     @classmethod
     def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None):
-        if cls == SMSBillable:
-            key = ["domain direction", domain, direction]
-        else:
-            key =["type domain direction", cls.__name__, domain, direction]
-        startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-        return cls._get_doc(key+startkey_suffix, key+endkey_suffix,
-            include_docs=include_docs)
+        data = []
+        for doc_type in cls._get_doc_types():
+            key = ["type domain direction", doc_type, domain, direction]
+            startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
+            data.extend(cls._get_docs(key+startkey_suffix, key+endkey_suffix, include_docs=include_docs))
+        return data
 
     @classmethod
     def handle_api_response(cls, message, **kwargs):
@@ -802,27 +801,32 @@ class MachSMSBillable(SMSBillable):
             self.mach_id = mach_id
             self.mach_delivery_status = delivery_status
 
+    _mach_couchview = "hqbilling/mach_billables"
     @classmethod
     def get_by_mach_id(cls, mach_id, include_docs=True):
-        return cls.view("hqbilling/mach_billable_items_by_mach_id",
+        return cls.view(cls._mach_couchview,
             reduce=False,
             include_docs=include_docs,
-            startkey=[mach_id],
-            endkey=[mach_id, {}]
+            startkey=["by mach_id", mach_id],
+            endkey=["by mach_id", mach_id, {}]
         )
 
     @classmethod
     def get_rateless(cls, include_docs=True):
-        return cls.view('hqbilling/mach_billable_rateless',
+        return cls.view(cls._mach_couchview,
             reduce=False,
-            include_docs=include_docs
+            include_docs=include_docs,
+            startkey=["rateless"],
+            endkey=["rateless", {}]
         )
 
     @classmethod
     def get_statusless(cls, include_docs=True):
-        return cls.view('hqbilling/mach_billable_statusless',
+        return cls.view(cls._mach_couchview,
             reduce=False,
-            include_docs=include_docs
+            include_docs=include_docs,
+            startkey=["statusless"],
+            endkey=["statusless", {}]
         )
 
     @classmethod

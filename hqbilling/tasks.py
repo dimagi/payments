@@ -26,7 +26,7 @@ class first_of_month(schedule):
 def update_currency_conversion():
     rate_classes = [MachSMSRate, TropoSMSRate, UnicelSMSRate]
     rate_codes = [klass.currency_code_setting() for klass in rate_classes]
-    currencies = BillableCurrency.view("hqbilling/active_currency",
+    currencies = BillableCurrency.view(BillableCurrency._currency_view,
         group=True
     ).all()
     relevant_codes = [cur.get('key')[0] for cur in currencies]

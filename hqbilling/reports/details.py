@@ -64,10 +64,11 @@ class SMSDetailReport(BillingDetailReport):
         for project in self.projects:
             if self.direction:
                 billables = SMSBillable.by_domain_and_direction(project, self.direction,
-                    start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
+                    start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc)
             else:
                 billables = SMSBillable.by_domain(project,
-                    start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc).all()
+                    start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc)
+
             for billable in billables:
                 totals[0] += billable.converted_billable_amount
                 totals[1] += billable.dimagi_surcharge
@@ -104,15 +105,10 @@ class MonthlyBillReport(BillingDetailReport):
             ),
             DataTablesColumnGroup("Messaging Expenses",
                 DataTablesColumn("Incoming"),
-                DataTablesColumn("Outgoing"),
-                DataTablesColumn("Total")
+                DataTablesColumn("Outgoing")
             ),
-            DataTablesColumnGroup("Hosting Expenses",
-                DataTablesColumn("# Active Users"),
-                DataTablesColumn("Total Charges")
-            ),
-            DataTablesColumn("Total Bill"),
-            DataTablesColumn("Billable Currency"),
+            DataTablesColumn("Total Bill (USD)"),
+            DataTablesColumn("Currency of Bill"),
 
             DataTablesColumn("Paid"),
             DataTablesColumn("Invoice", sortable=False),
@@ -144,9 +140,6 @@ class MonthlyBillReport(BillingDetailReport):
                     self._format_bill_amount(bill.incoming_sms_billed),
                     self._format_bill_amount(bill.outgoing_sms_billed),
                     self._format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed),
-                    len(bill.active_users),
-                    self._format_bill_amount(bill.active_users_billed),
-                    self._format_bill_amount(bill.incoming_sms_billed+bill.outgoing_sms_billed+bill.active_users_billed),
                     bill.currency.currency_code,
                     self.table_cell(
                         int(bill.paid),
