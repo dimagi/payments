@@ -43,12 +43,12 @@ def bill_client_for_sms(klass, message_id, **kwargs):
     try:
         message = MessageLog.get(message_id)
     except Exception as e:
-        logging.error("Failed to retrieve message log corresponding to billable: %s" % e)
+        logging.exception("Failed to retrieve message log corresponding to billable: %s" % e)
         return
     try:
         klass.handle_api_response(message, **kwargs)
     except Exception as e:
-        logging.error("Failed create billable item from message %s.\n ERROR: %s" % (message, e))
+        logging.exception("Failed create billable item from message %s.\n ERROR: %s" % (message, e))
 
 @periodic_task(run_every=crontab(minute=0, hour=0))
 def update_mach_billables():
