@@ -27,7 +27,7 @@ class BillingItemTests(TestCase):
             log.delete()
 
         # delete any existing billable items
-        all_billables = SMSBillable.by_domain(self.domain).all()
+        all_billables = SMSBillable.by_domain(self.domain)
         for billable in all_billables:
             billable.delete()
 
@@ -47,7 +47,7 @@ class BillingItemTests(TestCase):
         self.dimagi_surcharge.domain = self.domain
         self.dimagi_surcharge.direction = OUTGOING
         self.dimagi_surcharge.base_fee = 0.002
-        self.dimagi_surcharge.currency_code = self.dimagi_surcharge.currency_code_setting()
+        self.dimagi_surcharge.currency_code = self.dimagi_surcharge._admin_crud_class.currency_code
         self.dimagi_surcharge.last_modified = datetime.datetime.utcnow()
         self.dimagi_surcharge.save()
 
@@ -55,21 +55,21 @@ class BillingItemTests(TestCase):
         self.dimagi_surcharge_I.domain = self.domain
         self.dimagi_surcharge_I.direction = INCOMING
         self.dimagi_surcharge_I.base_fee = 0.001
-        self.dimagi_surcharge_I.currency_code = self.dimagi_surcharge_I.currency_code_setting()
+        self.dimagi_surcharge_I.currency_code = self.dimagi_surcharge._admin_crud_class.currency_code
         self.dimagi_surcharge_I.last_modified = datetime.datetime.utcnow()
         self.dimagi_surcharge_I.save()
 
         self.unicel_rate = UnicelSMSRate()
         self.unicel_rate.direction = OUTGOING
         self.unicel_rate.base_fee = 0.01
-        self.unicel_rate.currency_code = self.unicel_rate.currency_code_setting()
+        self.unicel_rate.currency_code = self.unicel_rate._admin_crud_class.currency_code
         self.unicel_rate.last_modified = datetime.datetime.utcnow()
         self.unicel_rate.save()
 
         self.unicel_incoming_rate = UnicelSMSRate()
         self.unicel_incoming_rate.direction = INCOMING
         self.unicel_incoming_rate.base_fee = 0.05
-        self.unicel_incoming_rate.currency_code = self.unicel_incoming_rate.currency_code_setting()
+        self.unicel_incoming_rate.currency_code = self.unicel_incoming_rate._admin_crud_class.currency_code
         self.unicel_incoming_rate.last_modified = datetime.datetime.utcnow()
         self.unicel_incoming_rate.save()
 
@@ -77,7 +77,7 @@ class BillingItemTests(TestCase):
         self.tropo_rate_any.direction = OUTGOING
         self.tropo_rate_any.base_fee = 0.02
         self.tropo_rate_any.country_code = ""
-        self.tropo_rate_any.currency_code = self.tropo_rate_any.currency_code_setting()
+        self.tropo_rate_any.currency_code = self.tropo_rate_any._admin_crud_class.currency_code
         self.tropo_rate_any.last_modified = datetime.datetime.utcnow()
         self.tropo_rate_any.save()
 
@@ -85,26 +85,27 @@ class BillingItemTests(TestCase):
         self.tropo_rate_us.direction = OUTGOING
         self.tropo_rate_us.base_fee = 0.01
         self.tropo_rate_us.country_code = "1"
-        self.tropo_rate_us.currency_code = self.tropo_rate_any.currency_code_setting()
+        self.tropo_rate_us.currency_code = self.tropo_rate_any._admin_crud_class.currency_code
         self.tropo_rate_us.last_modified = datetime.datetime.utcnow()
         self.tropo_rate_us.save()
 
         self.mach_rate = MachSMSRate()
         self.mach_rate.direction = OUTGOING
-        self.mach_rate.base_fee = 0.03
+        self.mach_rate.base_fee = 0.005
         self.mach_rate.network_surcharge = 0.0075
-        self.mach_rate.currency_code = self.mach_rate.currency_code_setting()
+        self.mach_rate.currency_code = self.mach_rate._admin_crud_class.currency_code
         self.mach_rate.last_modified = datetime.datetime.utcnow()
-        self.mach_rate.country_code = "265"
-        self.mach_rate.mcc = "650"
-        self.mach_rate.mnc = "10"
-        self.mach_rate.network = "CelTel Limited (ZAIN)"
-        self.mach_rate.iso = "mw"
-        self.mach_rate.country = "Malawi"
+        self.mach_rate.country_code = "49"
+        self.mach_rate.mcc = "262"
+        self.mach_rate.mnc = "07"
+        self.mach_rate.network = "O2"
+        self.mach_rate.iso = "de"
+        self.mach_rate.country = "Germany"
         self.mach_rate.save()
 
+
         self.mach_number = MachPhoneNumber()
-        self.mach_number.phone_number = "+265996536379"
+        self.mach_number.phone_number = "+4917685675599"
         self.mach_number.country = self.mach_rate.country
         self.mach_number.network = self.mach_rate.network
         self.mach_number.save()
@@ -161,8 +162,9 @@ class BillingItemTests(TestCase):
 
         logging.info("Response from UNICEL: %s" % data)
 
-        billable_item = UnicelSMSBillable.by_domain_and_direction(self.domain, OUTGOING).first()
-        if billable_item:
+        billable_items = UnicelSMSBillable.by_domain_and_direction(self.domain, OUTGOING)
+        if billable_items:
+            billable_item = billable_items[0]
             self.assertEqual(self.unicel_rate.base_fee * self.unicel_rate.conversion_rate,
                        billable_item.billable_amount)
             self.assertEqual(self.unicel_rate._id, billable_item.rate_id)
@@ -201,8 +203,9 @@ class BillingItemTests(TestCase):
         if log and not updated_log.billed:
             raise Exception("There were errors creating an incoming UNICEL billing rate!")
 
-        billable_item = UnicelSMSBillable.by_domain_and_direction(self.domain, INCOMING).first()
-        if billable_item:
+        billable_items = UnicelSMSBillable.by_domain_and_direction(self.domain, INCOMING)
+        if billable_items:
+            billable_item = billable_items[0]
             self.assertEqual(self.unicel_incoming_rate.base_fee,
                                    billable_item.billable_amount)
             self.assertEqual(self.unicel_incoming_rate._id, billable_item.rate_id)
@@ -235,8 +238,9 @@ class BillingItemTests(TestCase):
         tropo_id = TropoSMSBillable.get_tropo_id(data)
         logging.info("TROPO ID: %s" % tropo_id)
 
-        billable_item = TropoSMSBillable.by_domain(self.domain).first()
-        if billable_item:
+        billable_items = TropoSMSBillable.by_domain(self.domain)
+        if billable_items:
+            billable_item = billable_items[0]
             self.assertEqual(self.tropo_rate_us.base_fee,
                 billable_item.billable_amount)
             self.assertEqual(self.tropo_rate_us._id, billable_item.rate_id)
@@ -274,8 +278,9 @@ class BillingItemTests(TestCase):
         tropo_id = TropoSMSBillable.get_tropo_id(data)
         logging.info("TROPO ID: %s" % tropo_id)
 
-        billable_item = TropoSMSBillable.by_domain(self.domain).first()
-        if billable_item:
+        billable_items = TropoSMSBillable.by_domain(self.domain)
+        if billable_items:
+            billable_item = billable_items[0]
             self.assertEqual(self.tropo_rate_any.base_fee,
                 billable_item.billable_amount)
             self.assertEqual(self.tropo_rate_any._id, billable_item.rate_id)
@@ -310,13 +315,14 @@ class BillingItemTests(TestCase):
             data = "MACH RESPONSE +OK 01 message queued (dest=%s)" % msg.phone_number
             bill_client_for_sms(MachSMSBillable, msg.get_id, **dict(response=data,
                 _test_scrape=[['43535235Test', 'test', 'TEST', self.mach_number.phone_number,
-                               '09.08. 15:44:12', '09.08. 15:44:20', 'Malawi  CelTel Limited (ZAIN) ',
+                               '09.08. 15:44:12', '09.08. 15:44:20', 'Germany O2 ',
                                'delivered']]))
 
         logging.info("Response from MACH: %s" % data)
 
-        billable_item = MachSMSBillable.by_domain(self.domain).first()
-        if billable_item:
+        billable_items = MachSMSBillable.by_domain(self.domain)
+        if billable_items:
+            billable_item = billable_items[0]
             self.assertEqual(self.mach_rate.base_fee + self.mach_rate.network_surcharge,
                 billable_item.billable_amount)
             self.assertEqual(self.mach_rate._id, billable_item.rate_id)

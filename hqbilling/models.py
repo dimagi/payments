@@ -15,6 +15,7 @@ from corehq.apps.crud.models import AdminCRUDDocumentMixin
 from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db
+from dimagi.utils.dates import add_months
 from dimagi.utils.decorators.memoized import memoized
 from dimagi.utils.modules import to_function
 from dimagi.utils.timezones import utils as tz_utils
@@ -23,7 +24,9 @@ from hqbilling.crud import (SMSRateCRUDManager, DimagiDomainSMSRateCRUDManager, 
 from hqbilling.utils import get_mach_data, format_start_end_suffixes
 
 DEFAULT_BASE = 0.02
+MACH_BASE_RATE = 0.005
 ACTIVE_USER_RATE = 0.75
+UNKNOWN_RATE_ID = "UNKNOWN"
 INCOMING = "I"
 OUTGOING = "O"
 SMS_DIRECTIONS = {
@@ -258,14 +261,12 @@ class HQMonthlyBill(Document):
         setattr(self, '%s_sms_billed' % direction_name, cost)
 
     def _get_default_start_end(self):
+        # always last month
         today = datetime.datetime.utcnow()
-        td = datetime.timedelta(days=14)
-        two_weeks = today - td
-        billing_month = two_weeks.month
-        billing_year = two_weeks.year
-        (_, last_day) = calendar.monthrange(billing_year, billing_month)
-        start_date = datetime.datetime(billing_year, billing_month, 1, 0, 0, 0, 0)
-        end_date = datetime.datetime(billing_year, billing_month, last_day, 23, 59, 59, 999999)
+        (last_month_year, last_month) = add_months(today.year, today.month, -1)
+        (_, last_day) = calendar.monthrange(last_month_year, last_month)
+        start_date = datetime.datetime(last_day, last_month, 1, 0, 0, 0, 0)
+        end_date = datetime.datetime(last_day, last_month, last_day, 23, 59, 59, 999999)
         return start_date, end_date
 
     def new_bill(self, billing_range=None):
@@ -461,6 +462,9 @@ class MachSMSRate(SMSRate):
 
     _admin_crud_class = MachSMSRateCRUDManager
 
+    def __str__(self):
+        return "MACH %s Rate for %s in %s" % (self.direction, self.network, self.country)
+
     @property
     def billable_amount(self):
         return self.base_fee + self.network_surcharge
@@ -471,9 +475,8 @@ class MachSMSRate(SMSRate):
                 kwargs.get("network", "")]
 
     @classmethod
-    def get_by_number(cls, direction, mach_number, include_docs=True):
-        key = ["type", cls.__name__, direction, mach_number.network, mach_number.country]
-        return cls._get_by_key(key)
+    def get_by_number(cls, direction, mach_number):
+        return cls.get_default(direction, country=mach_number.country, network=mach_number.network)
 
 
 class TropoSMSRate(SMSRate):
@@ -511,6 +514,9 @@ class MachPhoneNumber(Document):
     network = StringProperty()
     country = StringProperty()
 
+    def __str__(self):
+        return "MACH Phone Number (%s) | Country: %s | Network: %s" % (self.phone_number, self.country, self.network)
+
     @classmethod
     def get_by_number(cls, number, api_info):
         try:
@@ -528,6 +534,7 @@ class MachPhoneNumber(Document):
             if not mach_number:
                 mach_number = cls()
             if country and network:
+                mach_number.phone_number = number
                 mach_number.country = country
                 mach_number.network = network
                 mach_number.save()
@@ -565,6 +572,9 @@ class SMSBillable(Document):
     direction = StringProperty()
     phone_number = StringProperty()
 
+    has_error = BooleanProperty(default=False)
+    error_message = StringProperty()
+
     @property
     def converted_billable_amount(self):
         return self.billable_amount * self.conversion_rate
@@ -573,27 +583,40 @@ class SMSBillable(Document):
     def total_billed(self):
         return self.converted_billable_amount + self.dimagi_surcharge
 
+    @property
+    def default_rate_item(self):
+        # Note: Not all rates have a default available
+        return None
+
     def _calculate_surcharge(self, message):
-        match_key = DimagiDomainSMSRate.generate_match_key(**dict(
-            direction=message.direction,
-            domain=message.domain
-        ))
-        dimagi_rate = DimagiDomainSMSRate.get_by_match(match_key)
+        dimagi_rate = DimagiDomainSMSRate.get_default(direction=message.direction, domain=message.domain)
         if not dimagi_rate:
-            dimagi_rate = DimagiDomainSMSRate.get_default_rate(message.direction)
+            # default rate
+            dimagi_rate = DimagiDomainSMSRate.get_default(message.direction, domain="")
         self.dimagi_surcharge = dimagi_rate.base_fee if dimagi_rate else 0
 
     def calculate_rate(self, rate_item, message, real_time=True):
+        if rate_item is None:
+            rate_item = self.default_rate_item
+
         if rate_item:
-            if real_time or self.billable_date is None:
-                self.billable_date = datetime.datetime.utcnow()
-            self.modified_date = datetime.datetime.utcnow()
             self.billable_amount = rate_item.billable_amount
             self.conversion_rate = rate_item.conversion_rate
             self.rate_id = rate_item._id
-            self._calculate_surcharge(message)
-            message.billed = True
-            message.save()
+        else:
+            self.rate_id = UNKNOWN_RATE_ID
+            self.conversion_rate = 1
+            self.billable_amount = 0
+            self.has_error = True
+            self.error_message = "Could not find rate item to match message or API response."
+        self._calculate_surcharge(message)
+
+        if real_time or self.billable_date is None:
+            self.billable_date = datetime.datetime.utcnow()
+        self.modified_date = datetime.datetime.utcnow()
+
+        message.billed = True
+        message.save()
 
     def save_message_info(self, message):
         self.log_id = message.get_id
@@ -643,10 +666,10 @@ class SMSBillable(Document):
     @classmethod
     def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None):
         data = []
-        for doc_type in cls._get_doc_types():
-            key = ["type domain direction", doc_type, domain, direction]
+        for c in cls._get_relevant_classes():
+            key = ["type domain direction", c.__name__, domain, direction]
             startkey_suffix, endkey_suffix = format_start_end_suffixes(start, end)
-            data.extend(cls._get_docs(key+startkey_suffix, key+endkey_suffix, include_docs=include_docs))
+            data.extend(c._get_docs(key+startkey_suffix, key+endkey_suffix, include_docs=include_docs))
         return data
 
     @classmethod
@@ -660,8 +683,8 @@ class SMSBillable(Document):
         billable = None
         if rate_item:
             billable = cls()
-            billable.calculate_rate(rate_item, message)
             billable.save_message_info(message)
+            billable.calculate_rate(rate_item, message)
             billable.save()
         else:
             message.billing_errors.append("Billing rate entry could not be found.")
@@ -681,8 +704,7 @@ class UnicelSMSBillable(SMSBillable):
     @classmethod
     def handle_api_response(cls, message, **kwargs):
         response = kwargs.get('response', None)
-        match_key = UnicelSMSRate.generate_match_key(**dict(direction=message.direction))
-        rate_item = UnicelSMSRate.get_by_match(match_key)
+        rate_item = UnicelSMSRate.get_default(direction=message.direction)
         if not rate_item:
             message.billing_errors.append("No Unicel rate item could be found for key: %s" % match_key)
         elif isinstance(response, str) and len(response) > 0:
@@ -724,6 +746,10 @@ class TropoSMSBillable(SMSBillable):
     """
     tropo_id = StringProperty()
 
+    @property
+    def default_rate_item(self):
+        return TropoSMSRate.get_default(self.direction or OUTGOING, country_code="")
+
     @classmethod
     def handle_api_response(cls, message, **kwargs):
         response = kwargs.get("response")
@@ -732,12 +758,9 @@ class TropoSMSBillable(SMSBillable):
         successful = bool(match and match.group() == '<success>true</success>')
         if successful:
             number = phonenumbers.parse(message.phone_number)
-            rate_item = TropoSMSRate.get_by_match(
-                TropoSMSRate.generate_match_key(**dict(direction=message.direction,
-                    country_code="%d" % number.country_code
-                )))
+            rate_item = TropoSMSRate.get_default(direction=message.direction, country_code="%d" % number.country_code)
             if not rate_item:
-                rate_item = TropoSMSRate.get_default_rate(message.direction).first()
+                rate_item = TropoSMSRate.get_default(message.direction, country_code="")
             result = cls.save_from_message(rate_item, message)
             billable = result.get('billable', None)
             if billable:
@@ -769,6 +792,10 @@ class MachSMSBillable(SMSBillable):
     mach_delivery_status = StringProperty()
     mach_id = StringProperty()
     mach_delivered_date = DateTimeProperty()
+
+    @property
+    def default_rate_item(self):
+        return MachSMSRate.get_default(self.direction or OUTGOING, country="", network="")
 
     def save_message_info(self, message):
         self.sync_attempts.append(datetime.datetime.utcnow())

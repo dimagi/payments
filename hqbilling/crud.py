@@ -1,5 +1,6 @@
 import decimal
 import datetime
+from django.utils.safestring import mark_safe
 from corehq.apps.crud.models import BaseAdminHQTabularCRUDManager
 import settings
 
@@ -89,11 +90,8 @@ class SMSRateCRUDManager(BaseAdminHQTabularCRUDManager):
         self.document_instance.currency_code = self.currency_code
         super(SMSRateCRUDManager, self).update(**kwargs)
 
-        print "BASE FEE", self.document_instance.base_fee
-
     def is_valid(self, existing=None, **kwargs):
         existing_doc = self.document_class.get_default(**kwargs)
-        print existing_doc
         if existing and existing_doc:
             return existing_doc._id == existing._id
         return not existing_doc
@@ -114,6 +112,13 @@ class MachSMSRateCRUDManager(SMSRateCRUDManager):
                 "mnc",
                 "base_fee",
                 "network_surcharge"]
+
+    def format_property(self, key, property):
+        if key == "country":
+            return property if property else mark_safe(" <strong>All Non-Matching Countries</strong>")
+        if key == "network":
+            return property if property else mark_safe(" <strong>All Non-Matching Networks</strong>")
+        return super(MachSMSRateCRUDManager, self).format_property(key, property)
 
 
 class TropoSMSRateCRUDManager(SMSRateCRUDManager):

@@ -8,7 +8,7 @@ from dimagi.utils.excel import WorkbookJSONReader
 from hqstyle.forms.widgets import BootstrapRadioSelect, \
     BootstrapAddressField, BootstrapPhoneNumberInput
 from hqbilling.models import (SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING,
-    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency)
+    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency, MACH_BASE_RATE)
 
 DIRECTION_CHOICES = ((OUTGOING, SMS_DIRECTIONS.get(OUTGOING),), (INCOMING, SMS_DIRECTIONS.get(INCOMING),))
 DUPE_CHECK_NEW = "new"
@@ -28,12 +28,19 @@ class MachSMSRateForm(SMSRateForm):
 
     # fields
     network_surcharge = forms.DecimalField(required=False, label="Network Surcharge", initial=0)
-    country = forms.CharField(required=True, label="Country")
-    network = forms.CharField(required=True, label="Network")
+    country = forms.CharField(required=False, label="Country")
+    network = forms.CharField(required=False, label="Network")
     country_code = forms.CharField(required=False, label="Country Code")
     iso = forms.CharField(required=False, label="ISO")
     mcc = forms.CharField(required=False, label="MCC")
     mnc = forms.CharField(required=False, label="MNC")
+
+    def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
+                 initial=None, error_class=ErrorList, label_suffix=':',
+                 empty_permitted=False, doc_id=None):
+        super(MachSMSRateForm, self).__init__(data, files, auto_id, prefix, initial,
+            error_class, label_suffix, empty_permitted, doc_id=doc_id)
+        self.fields['base_fee'].initial = MACH_BASE_RATE
 
 
 class TropoSMSRateForm(SMSRateForm):
@@ -125,7 +132,6 @@ class MachExcelFileUploadForm(forms.Form):
 
             for k in ['network_surcharge']:
                 val = row[k] or 0.0
-                print val
                 row[k] = "%f" % val
 
             if mach_rate and not overwrite:

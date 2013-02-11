@@ -1,3 +1,4 @@
+import dateutil
 from corehq.apps.crud.views import BaseAdminCRUDFormView
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound, Http404
@@ -7,6 +8,7 @@ from corehq.apps.domain.decorators import require_superuser
 from dimagi.utils.web import render_to_response
 from hqbilling.forms import *
 from hqbilling.models import *
+from hqbilling.tasks import generate_monthly_bills
 
 @require_superuser
 def default_billing_report(request):
@@ -67,7 +69,16 @@ class BillingAdminCRUDFormView(BaseAdminCRUDFormView):
         # todo
         return True
 
-
+@require_superuser
+def generate_bills(request):
+    try:
+        start = dateutil.parser.parse(request.GET.get('start'))
+        end = dateutil.parser.parse(request.GET.get('end'))
+        date_range = [start, end]
+    except Exception:
+        date_range = None
+    generate_monthly_bills(billing_range=date_range, domain_name=request.GET.get('domain'))
+    return Http404
 
 #
 #def deltestdata(request):

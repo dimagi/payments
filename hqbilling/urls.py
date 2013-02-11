@@ -10,16 +10,9 @@ urlpatterns = patterns('hqbilling.views',
     url(r'^form/(?P<form_type>[\w_]+)/(?P<action>[(update)|(new)|(delete)]+)/((?P<item_id>[\w_]+)/)?$',
         BillingAdminCRUDFormView.as_view(), name="billing_item_form"),
 
-
-
     #    url(r'^delete/all/', "deltestdata"),
 
-    #    url(r'^forms/(?P<form>[\w_]+)/(?P<item_type>[\w_]+)/(?P<item_id>[\w_]+)/$', 'updatable_item_form',
-    #        name='billing_update_item_form'),
-    #    url(r'^forms/(?P<form>[\w_]+)/$', 'updatable_item_form', name='billing_new_item_form'),
-
-
-
+    url(r'^generate_bill/', "generate_bills"),
 
     url(r'^bill/invoice/(?P<bill_id>[\w-]+)/$', 'bill_invoice',
         name='billing_invoice'),

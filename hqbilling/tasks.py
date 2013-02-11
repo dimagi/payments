@@ -1,10 +1,9 @@
 import datetime
 from celery.log import get_task_logger
-import re
 from celery.schedules import crontab, schedule
 from celery.task import periodic_task, task
 from django.conf import settings
-import urllib2
+from corehq.apps.sms.models import SMSLog
 from hqbilling.models import MachSMSRate, UnicelSMSRate, TropoSMSRate, MachSMSBillable, \
     MachPhoneNumber, HQMonthlyBill, BillableCurrency
 from hqbilling.utils import get_mach_data, deal_with_delinquent_mach_billable
@@ -25,7 +24,7 @@ class first_of_month(schedule):
 @periodic_task(run_every=crontab(minute=0, hour='*/6'))
 def update_currency_conversion():
     rate_classes = [MachSMSRate, TropoSMSRate, UnicelSMSRate]
-    rate_codes = [klass.currency_code_setting() for klass in rate_classes]
+    rate_codes = [klass._admin_crud_class.currency_code for klass in rate_classes]
     currencies = BillableCurrency.view(BillableCurrency._currency_view,
         group=True
     ).all()
@@ -54,6 +53,7 @@ def bill_client_for_sms(klass, message_id, **kwargs):
 def update_mach_billables():
     mach_data = get_mach_data(days=3)
     try:
+        # rateless billables are Mach Billables that do not have a delivered date
         rateless_billables = MachSMSBillable.get_rateless().all()
         for billable in rateless_billables:
             billable.sync_attempts.append(datetime.datetime.utcnow())
@@ -62,16 +62,19 @@ def update_mach_billables():
                 if phone_number == billable.phone_number:
                     mach_number = MachPhoneNumber.get_by_number(phone_number, data)
                     rate_item = MachSMSRate.get_by_number(billable.direction, mach_number)
-                    if rate_item:
-                        # todo fix this guy.
-                        billable.update_item_from_form(rate_item)
-                        billable.save()
+                    message = SMSLog.get(billable.log_id)
+
+                    billable.calculate_rate(rate_item, message)
+                    billable.save()
+
                     billable.update_mach_delivery_status(data)
                     billable.save()
+
                     if billable.rate_id and billable.mach_delivered_date:
                         break
             deal_with_delinquent_mach_billable(billable)
 
+        # statusless billables are Mach Billables that were not confirmed as deivered
         statusless_billables = MachSMSBillable.get_statusless().all()
         for billable in statusless_billables:
             billable.sync_attempts.append(datetime.datetime.utcnow())
@@ -86,8 +89,12 @@ def update_mach_billables():
         logging.error("There was an error updating mach billables: %s" % e)
 
 
-@periodic_task(run_every=first_of_month())
-def generate_monthly_bills():
+@periodic_task(run_every=crontab())
+def generate_monthly_bills(billing_range=None, domain_name=None):
     from corehq.apps.domain.models import Domain
-    for domain in Domain.get_all():
-        HQMonthlyBill.create_bill_for_domain(domain.name)
+    if domain_name is not None:
+        domains = [Domain.get_by_name(domain_name)]
+    else:
+        domains = Domain.get_all()
+    for domain in domains:
+        HQMonthlyBill.create_bill_for_domain(domain.name, billing_range=billing_range)
