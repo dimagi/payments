@@ -8,10 +8,11 @@ from hqbilling.tasks import generate_monthly_bills
 class TestMonthlyBillFewUsers(TestCase):
 
     def setUp(self):
-        two_weeks_ago = datetime.datetime.utcnow()-datetime.timedelta(days=14)
-
         for domain in Domain.get_all():
             domain.delete()
+
+        start_date, _ = HQMonthlyBill.get_default_start_end()
+        sms_date = start_date + datetime.timedelta(days=7)
 
         all_billables = SMSBillable.get_all()
         # all_billables contains duplicates; only delete each doc once
@@ -21,13 +22,13 @@ class TestMonthlyBillFewUsers(TestCase):
         self.domain = Domain()
         self.domain.name = "domain_with_sms"
         self.domain.is_active = True
-        self.domain.date_created = two_weeks_ago
+        self.domain.date_created = sms_date
         self.domain.save()
 
         # Incoming billables
 
         self.tropo_bill = TropoSMSBillable()
-        self.tropo_bill.billable_date = two_weeks_ago
+        self.tropo_bill.billable_date = sms_date
         self.tropo_bill.billable_amount = 2
         self.tropo_bill.conversion_rate = 1
         self.tropo_bill.dimagi_surcharge = 0.002
@@ -42,9 +43,9 @@ class TestMonthlyBillFewUsers(TestCase):
         # Outgoing billables
 
         self.mach_bill = MachSMSBillable()
-        self.mach_bill.billable_date = two_weeks_ago
-        self.mach_bill.contacted_mach_api = two_weeks_ago
-        self.mach_bill.mach_delivered_date = two_weeks_ago
+        self.mach_bill.billable_date = sms_date
+        self.mach_bill.contacted_mach_api = sms_date
+        self.mach_bill.mach_delivered_date = sms_date
         self.mach_bill.billable_amount = 0.01
         self.mach_bill.conversion_rate = 1.2
         self.mach_bill.dimagi_surcharge = 0.002
@@ -58,7 +59,7 @@ class TestMonthlyBillFewUsers(TestCase):
         self.mach_bill.save()
 
         self.unicel_bill = UnicelSMSBillable()
-        self.unicel_bill.billable_date = two_weeks_ago
+        self.unicel_bill.billable_date = sms_date
         self.unicel_bill.billable_amount = 2
         self.unicel_bill.conversion_rate = 1
         self.unicel_bill.dimagi_surcharge = 0.002
@@ -82,9 +83,7 @@ class TestMonthlyBillFewUsers(TestCase):
         generate_monthly_bills()
         last_bill = HQMonthlyBill.get_bills(self.domain.name).first()
         if last_bill:
-            self.assertEqual(self.tropo_bill.total_billed,
-                last_bill.incoming_sms_billed)
-            self.assertEqual(self.unicel_bill.total_billed+self.mach_bill.total_billed,
-                last_bill.outgoing_sms_billed)
+            self.assertEqual(self.tropo_bill.total_billed, last_bill.incoming_sms_billed)
+            self.assertEqual(self.unicel_bill.total_billed + self.mach_bill.total_billed, last_bill.outgoing_sms_billed)
         else:
             raise Exception("Monthly Bill not successfully generated.")

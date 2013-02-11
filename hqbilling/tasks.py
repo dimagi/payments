@@ -92,9 +92,7 @@ def update_mach_billables():
 @periodic_task(run_every=crontab())
 def generate_monthly_bills(billing_range=None, domain_name=None):
     from corehq.apps.domain.models import Domain
-    if domain_name is not None:
-        domains = [Domain.get_by_name(domain_name)]
-    else:
-        domains = Domain.get_all()
+    domains = [Domain.get_by_name(domain_name)] if domain_name is not None else Domain.get_all()
     for domain in domains:
+        print "Domain", domain
         HQMonthlyBill.create_bill_for_domain(domain.name, billing_range=billing_range)

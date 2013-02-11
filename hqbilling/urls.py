@@ -12,7 +12,7 @@ urlpatterns = patterns('hqbilling.views',
 
     #    url(r'^delete/all/', "deltestdata"),
 
-    url(r'^generate_bill/', "generate_bills"),
+    url(r'^generate_bill/$', "generate_bills"),
 
     url(r'^bill/invoice/(?P<bill_id>[\w-]+)/$', 'bill_invoice',
         name='billing_invoice'),

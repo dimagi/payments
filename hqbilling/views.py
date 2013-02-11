@@ -71,14 +71,17 @@ class BillingAdminCRUDFormView(BaseAdminCRUDFormView):
 
 @require_superuser
 def generate_bills(request):
+    print "generating bills"
+    status = "Last Month"
     try:
         start = dateutil.parser.parse(request.GET.get('start'))
         end = dateutil.parser.parse(request.GET.get('end'))
         date_range = [start, end]
+        status = "%s through %s" % (start, end)
     except Exception:
         date_range = None
     generate_monthly_bills(billing_range=date_range, domain_name=request.GET.get('domain'))
-    return Http404
+    return HttpResponse("Bills generated for %s." % status)
 
 #
 #def deltestdata(request):

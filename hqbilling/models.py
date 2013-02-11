@@ -260,8 +260,9 @@ class HQMonthlyBill(Document):
         setattr(self, '%s_sms_billables' % direction_name, all_ids)
         setattr(self, '%s_sms_billed' % direction_name, cost)
 
-    def _get_default_start_end(self):
-        # always last month
+    @classmethod
+    def get_default_start_end(cls):
+        # Last month's date range
         today = datetime.datetime.utcnow()
         (last_month_year, last_month) = add_months(today.year, today.month, -1)
         (_, last_day) = calendar.monthrange(last_month_year, last_month)
@@ -273,7 +274,9 @@ class HQMonthlyBill(Document):
         start = billing_range[0] if billing_range else None
         end = billing_range[1] if billing_range else None
         if not (isinstance(start, datetime.datetime) and isinstance(end, datetime.datetime)):
-            start, end = self._get_default_start_end()
+            start, end = self.get_default_start_end()
+
+        print "START END", start, end
 
         self.billing_period_start = start
         self.billing_period_end = end
@@ -308,11 +311,10 @@ class HQMonthlyBill(Document):
     def create_bill_for_domain(cls, domain, billing_range=None):
         bill = cls(domain=domain)
         bill.new_bill(billing_range)
-
-        if bill.incoming_sms_billed > 0 or \
-           bill.outgoing_sms_billed > 0:
+        if bill.incoming_sms_billed > 0 or bill.outgoing_sms_billed > 0:
             # save only the bills with costs attached so that there isn't a long list
             # of non-actionable bills at the end
+            print "SAVED BILL"
             bill.save()
             logging.info("[BILLING] Bill for project %s was created." % domain)
         else:
