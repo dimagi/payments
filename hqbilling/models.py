@@ -276,8 +276,6 @@ class HQMonthlyBill(Document):
         if not (isinstance(start, datetime.datetime) and isinstance(end, datetime.datetime)):
             start, end = self.get_default_start_end()
 
-        print "START END", start, end
-
         self.billing_period_start = start
         self.billing_period_end = end
         self.date_generated = datetime.datetime.utcnow()
@@ -314,7 +312,6 @@ class HQMonthlyBill(Document):
         if bill.incoming_sms_billed > 0 or bill.outgoing_sms_billed > 0:
             # save only the bills with costs attached so that there isn't a long list
             # of non-actionable bills at the end
-            print "SAVED BILL"
             bill.save()
             logging.info("[BILLING] Bill for project %s was created." % domain)
         else:

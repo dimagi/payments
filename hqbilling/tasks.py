@@ -89,10 +89,9 @@ def update_mach_billables():
         logging.error("There was an error updating mach billables: %s" % e)
 
 
-@periodic_task(run_every=crontab())
+@periodic_task(run_every=first_of_month())
 def generate_monthly_bills(billing_range=None, domain_name=None):
     from corehq.apps.domain.models import Domain
     domains = [Domain.get_by_name(domain_name)] if domain_name is not None else Domain.get_all()
     for domain in domains:
-        print "Domain", domain
         HQMonthlyBill.create_bill_for_domain(domain.name, billing_range=billing_range)
