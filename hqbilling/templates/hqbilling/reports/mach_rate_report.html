@@ -1,10 +1,6 @@
-{% extends "hqbilling/reports/updatable_item_report.html" %}
+{% extends "crud/interfaces/crud.tabular.html" %}
 {% load hqstyle_tags %}
 {% load hq_shared_tags %}
-
-{% block extra_actions %}
-    <a href="#bulkUploadRateModal" class="btn" data-toggle="modal">Upload Rates in Bulk</a>
-{% endblock %}
 
 {% block modals %} {{ block.super }}
     <div class="modal hide fade" id="bulkUploadRateModal">

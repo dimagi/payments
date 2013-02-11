@@ -9,7 +9,7 @@ class SelectSMSBillableDomainsField(ReportSelectField):
     cssClasses = "span6"
     default_option = "Choose a project..."
     as_combo = True
-    billable_view = 'hqbilling/all_billable_items'
+    billable_view = 'hqbilling/sms_billables'
 
     def update_params(self):
         domains = self.get_billable_domains()

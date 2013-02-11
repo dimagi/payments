@@ -1,21 +1,65 @@
-from datetime import datetime
 from django import forms
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.forms.util import ErrorList
-from django.forms.widgets import HiddenInput, Select
 from django.utils.safestring import mark_safe
-import magic
 from openpyxl.shared.exc import InvalidFileException
+from corehq.apps.crud.models import BaseAdminCRUDForm
 from dimagi.utils.excel import WorkbookJSONReader
 from hqstyle.forms.widgets import BootstrapRadioSelect, \
     BootstrapAddressField, BootstrapPhoneNumberInput
-from hqbilling.models import SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING, \
-    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency
+from hqbilling.models import (SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING,
+    SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency, MACH_BASE_RATE)
 
 DIRECTION_CHOICES = ((OUTGOING, SMS_DIRECTIONS.get(OUTGOING),), (INCOMING, SMS_DIRECTIONS.get(INCOMING),))
 DUPE_CHECK_NEW = "new"
 DUPE_CHECK_EXISTING = "existing"
+
+
+class SMSRateForm(BaseAdminCRUDForm):
+    doc_class = SMSRate
+
+    # fields
+    direction = forms.ChoiceField(widget=BootstrapRadioSelect, initial=OUTGOING, choices=DIRECTION_CHOICES)
+    base_fee = forms.DecimalField(required=True, initial=DEFAULT_BASE, label="Fee")
+
+
+class MachSMSRateForm(SMSRateForm):
+    doc_class = MachSMSRate
+
+    # fields
+    network_surcharge = forms.DecimalField(required=False, label="Network Surcharge", initial=0)
+    country = forms.CharField(required=False, label="Country")
+    network = forms.CharField(required=False, label="Network")
+    country_code = forms.CharField(required=False, label="Country Code")
+    iso = forms.CharField(required=False, label="ISO")
+    mcc = forms.CharField(required=False, label="MCC")
+    mnc = forms.CharField(required=False, label="MNC")
+
+    def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
+                 initial=None, error_class=ErrorList, label_suffix=':',
+                 empty_permitted=False, doc_id=None):
+        super(MachSMSRateForm, self).__init__(data, files, auto_id, prefix, initial,
+            error_class, label_suffix, empty_permitted, doc_id=doc_id)
+        self.fields['base_fee'].initial = MACH_BASE_RATE
+
+
+class TropoSMSRateForm(SMSRateForm):
+    doc_class = TropoSMSRate
+
+    # fields
+    country_code = forms.CharField(required=False, label="Country Code (or blank for any)")
+
+
+class UnicelSMSRateForm(SMSRateForm):
+    doc_class = UnicelSMSRate
+
+
+class DimagiSMSRateForm(SMSRateForm):
+    doc_class = DimagiDomainSMSRate
+
+    #fields
+    domain = forms.CharField(label="Project Name\n (blank for any)", required=False)
+
 
 class DomainBillingInfoForm(forms.Form):
     currency_code = forms.ChoiceField(choices=[(settings.DEFAULT_CURRENCY, settings.DEFAULT_CURRENCY)])
@@ -43,124 +87,24 @@ class DomainBillingInfoForm(forms.Form):
         domain.update_billing_info(**params)
         domain.save()
 
-class ItemUpdateForm(forms.Form):
-    # todo move over to the version in dimagi-utils
-    def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
-                 initial=None, error_class=ErrorList, label_suffix=':',
-                 empty_permitted=False, item_id=None):
-        self.item_id = item_id
-        super(ItemUpdateForm, self).__init__(data, files, auto_id, prefix, initial,
-            error_class, label_suffix, empty_permitted)
 
-    @property
-    def item_class(self):
-        return NotImplementedError
+class BillableCurrencyUpdateForm(BaseAdminCRUDForm):
+    doc_class = BillableCurrency
 
-    def update(self, rate):
-        params = self.cleaned_data
-        rate.update_item_from_form(**params)
-        return [rate.as_row]
-
-    def save(self):
-        params = self.cleaned_data
-        rate = self.item_class.get_or_create_new_from_form(**params)
-        return [rate.as_row]
-
-
-class BillableCurrencyUpdateForm(ItemUpdateForm):
     currency_code = forms.CharField(required=True, label="Currency Code (ex: USD)")
     symbol = forms.CharField(required=False, label="Symbol for currency (ex: $)")
 
-    @property
-    def item_class(self):
-        return BillableCurrency
 
-    def clean(self):
-        cleaned_data = super(BillableCurrencyUpdateForm, self).clean()
-        currency = BillableCurrency.get_by_code(cleaned_data.get("currency_code")).first()
-        if currency and self.item_id is None:
-            raise ValidationError("That currency code has already been used. Try editing that code directly")
-        elif currency and self.item_id != currency.get_id:
-            raise ValidationError("That currency code has already been used!")
-        return cleaned_data
+class TaxRateUpdateForm(BaseAdminCRUDForm):
+    doc_class = TaxRateByCountry
 
-
-class TaxRateUpdateForm(ItemUpdateForm):
     country = forms.CharField(required=False, label="Country\n (or blank for any)")
     tax_rate = forms.DecimalField(required=True, label="Tax Rate %")
-
-    @property
-    def item_class(self):
-        return TaxRateByCountry
-
-    def clean(self):
-        cleaned_data = super(TaxRateUpdateForm, self).clean()
-        tax_rate = TaxRateByCountry.get_by_country(cleaned_data.get("country")).first()
-        if tax_rate and self.item_id is None:
-            raise ValidationError("A tax rate for the country %s already exists. Please edit that existing rate." %
-                                  cleaned_data.get("country"))
-        elif tax_rate and self.item_id != tax_rate.get_id:
-            raise ValidationError("There is already a tax rate for that country.")
-        return cleaned_data
-
-
-class SMSRateForm(ItemUpdateForm):
-    direction = forms.ChoiceField(widget=BootstrapRadioSelect, initial=OUTGOING, choices=DIRECTION_CHOICES)
-    base_fee = forms.DecimalField(required=True, initial=DEFAULT_BASE, label="Fee")
-
-    @property
-    def item_class(self):
-        return SMSRate
-
-    def clean(self):
-        cleaned_data = super(SMSRateForm, self).clean()
-        rate_item = self.item_class.get_by_match(self.item_class.generate_match_key(**cleaned_data))
-        if rate_item and self.item_id is None:
-            raise ValidationError("A rate item like this already exists. Please edit that item instead.")
-        elif rate_item and self.item_id != rate_item.get_id:
-            raise ValidationError("You are making this rate the same as an existing one.")
-        return cleaned_data
-
-
-class MachSMSRateForm(SMSRateForm):
-    network_surcharge = forms.DecimalField(required=False, label="Network Surcharge", initial=0)
-    country = forms.CharField(required=True, label="Country")
-    network = forms.CharField(required=True, label="Network")
-    country_code = forms.CharField(required=False, label="Country Code")
-    iso = forms.CharField(required=False, label="ISO")
-    mcc = forms.CharField(required=False, label="MCC")
-    mnc = forms.CharField(required=False, label="MNC")
-
-    @property
-    def item_class(self):
-        return MachSMSRate
-
-
-class TropoSMSRateForm(SMSRateForm):
-    country_code = forms.CharField(required=False, label="Country Code (or blank for any)")
-
-    @property
-    def item_class(self):
-        return TropoSMSRate
-
-
-class UnicelSMSRateForm(SMSRateForm):
-    @property
-    def item_class(self):
-        return UnicelSMSRate
-
-
-class DimagiSMSRateForm(SMSRateForm):
-    domain = forms.CharField(label="Project Name\n (blank for any)", required=False)
-
-    @property
-    def item_class(self):
-        return DimagiDomainSMSRate
 
 
 class MachExcelFileUploadForm(forms.Form):
     mach_file = forms.FileField(label="Rate Spreadsheet")
-    overwrite = forms.BooleanField(label="Overwrite Existing Rates", initial=True)
+    overwrite = forms.BooleanField(label="Overwrite Existing Rates", initial=True, required=False)
 
     def clean_mach_file(self):
         if 'mach_file' in self.cleaned_data:
@@ -177,6 +121,26 @@ class MachExcelFileUploadForm(forms.Form):
     def save(self):
         mach_file = self.cleaned_data['mach_file']
         overwrite = self.cleaned_data['overwrite']
+
         for row in mach_file:
             row = dict([(key.split(' ')[0], val) for key, val in row.items()])
-            rate = MachSMSRate.get_or_create_new_from_form(overwrite=overwrite, **row)
+            mach_rate = MachSMSRate.get_default(**row)
+
+            # clean up parser
+            for k in ['mcc', 'country_code', 'mnc']:
+                row[k] = str(row[k])
+
+            for k in ['network_surcharge']:
+                val = row[k] or 0.0
+                row[k] = "%f" % val
+
+            if mach_rate and not overwrite:
+                continue
+            if not mach_rate:
+                mach_rate = MachSMSRate()
+            for key, item in row.items():
+                try:
+                    setattr(mach_rate, key, item)
+                except AttributeError:
+                    pass
+            mach_rate.save()

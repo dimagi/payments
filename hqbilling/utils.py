@@ -56,12 +56,33 @@ def get_mach_data(days=1):
 
 def deal_with_delinquent_mach_billable(billable):
     if len(billable.sync_attempts) > 6 and not (billable.rate_id and billable.mach_delivered_date):
-        # billable information not complete, delete billable item and set MessageLog item to not billed
+        # billable information not complete, mark billable item as error and do not charge for the message.
         message = MessageLog.get(billable.log_id)
         message.billed = False
         message.billing_errors.append("Could not verify Mach billable after several attempts.")
         message.save()
-        billable.delete()
+
+        now = datetime.datetime.utcnow()
+        # officially close out the billable
+        billable.billable_date = billable.billable_date or now
+        billable.modified_date = billable.modified_date or now
+        billable.mach_delivered_date = billable.mach_delivered_date or now
+
+        if billable.mach_delivery_status != "accepted":
+            # generally the status will say something other than accepted after a while once it's actually accepted,
+            # however, sometimes it just stays at this. If it has any other delivery status at this point, mark it as
+            # an error.
+            billable.billable_amount = 0
+            billable.conversion_rate = 1
+            billable.dimagi_surcharge = billable.dimagi_surcharge or 0
+            from hqbilling.models import UNKNOWN_RATE_ID
+            billable.rate_id = billable.rate_id or UNKNOWN_RATE_ID
+
+            billable.has_error = True
+            if not billable.error_message:
+                billable.error_message = "Mach failed to send message due to '%s'" % billable.mach_delivery_status
+
+        billable.save()
 
 def format_start_end_suffixes(start=None, end=None):
     if isinstance(start, datetime.datetime):
