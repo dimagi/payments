@@ -2,10 +2,11 @@ from django.core.urlresolvers import reverse
 from django.template.loader import render_to_string
 from django.utils.safestring import mark_safe
 from corehq.apps.reports.standard import DatespanMixin
-from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DataTablesColumnGroup
+from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DataTablesColumnGroup, DTSortType
 from corehq.apps.reports.generic import GenericTabularReport
 from dimagi.utils.decorators.memoized import memoized
 from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, SelectSMSBillableDomainsField
+from hqbilling.filters import SelectSMSBillableDomainsFilter
 from hqbilling.models import HQMonthlyBill, SMS_DIRECTIONS, SMSBillable
 from hqbilling.reports import HQBillingReport
 
@@ -19,7 +20,7 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
     @memoized
     def projects(self):
         project = self.request.GET.get(self.project_filter_class.slug)
-        all_projects = self.project_filter_class.get_billable_domains()
+        all_projects = [d.name for d in self.project_filter_class.get_billable_domains()]
         return [project] if project else all_projects
 
     def _format_bill_amount(self, amount):
@@ -30,11 +31,11 @@ class SMSDetailReport(BillingDetailReport):
     name = "Messaging Details"
     slug = "sms_detail"
     fields = ['corehq.apps.reports.fields.DatespanField',
-              'hqbilling.fields.SelectSMSBillableDomainsField',
+              'hqbilling.filters.SelectSMSBillableDomainsFilter',
               'hqbilling.fields.SelectSMSDirectionField']
     exportable = True
 
-    project_filter_class = SelectSMSBillableDomainsField
+    project_filter_class = SelectSMSBillableDomainsFilter
 
     description = "See all the SMS messages sent during a time frame, per domain, and per direction."
 
@@ -46,7 +47,7 @@ class SMSDetailReport(BillingDetailReport):
     @property
     def headers(self):
         return DataTablesHeader(
-            DataTablesColumn("Date"),
+            DataTablesColumn("Date", sort_type=DTSortType.DATE),
             DataTablesColumn("Project"),
             DataTablesColumn("Direction"),
             DataTablesColumn("Backend API"),
@@ -74,7 +75,7 @@ class SMSDetailReport(BillingDetailReport):
                 totals[1] += billable.dimagi_surcharge
                 totals[2] += billable.total_billed
                 rows.append([
-                    self.table_cell(billable.billable_date,
+                    self.table_cell(billable.billable_date.isoformat(),
                         billable.billable_date.strftime("%B %d, %Y %H:%M:%S")),
                     project,
                     SMS_DIRECTIONS.get(billable.direction),
@@ -91,10 +92,10 @@ class MonthlyBillReport(BillingDetailReport):
     name = "Monthly Bill by Project"
     slug = "monthly_bill"
     fields = ['hqbilling.fields.DatespanBillingStartField',
-              'hqbilling.fields.SelectBilledDomainsField']
+              'hqbilling.filters.SelectSMSBillableDomainsFilter']
     report_template_path = "hqbilling/reports/monthly_bill_summary_report.html"
 
-    project_filter_class = SelectBilledDomainsField
+    project_filter_class = SelectSMSBillableDomainsFilter
 
     @property
     def headers(self):
