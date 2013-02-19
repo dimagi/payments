@@ -1,14 +1,14 @@
 import datetime
-from celery.log import get_task_logger
 from celery.schedules import crontab, schedule
 from celery.task import periodic_task, task
+from celery.utils.log import get_task_logger
 from django.conf import settings
 from corehq.apps.sms.models import SMSLog
 from hqbilling.models import MachSMSRate, UnicelSMSRate, TropoSMSRate, MachSMSBillable, \
     MachPhoneNumber, HQMonthlyBill, BillableCurrency
 from hqbilling.utils import get_mach_data, deal_with_delinquent_mach_billable
 
-logging = get_task_logger()
+logging = get_task_logger(__name__)
 
 class first_of_month(schedule):
     # from http://stackoverflow.com/questions/4397530/how-do-i-schedule-a-task-with-celery-that-runs-on-1st-of-every-month
