@@ -5,7 +5,7 @@ from hqbilling.dispatcher import BillingInterfaceDispatcher
 
 class HQBillingReport(GenericReportView):
     section_name = "HQ Billing"
-    app_slug = 'hqbilling'
+    base_template = "hqbilling/base_template.html"
     asynchronous = True
     is_admin_report = True
     exportable = False
