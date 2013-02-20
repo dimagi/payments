@@ -1,0 +1,12 @@
+{% if has_error %}
+    <span class="label label-important billing-status-detail"
+      data-title="Error creating {{ billable_type }} Billable"
+      data-content="<p>{{ error_msg }}</p><p>No carrier charge was applied. Last attempt to bill was {{ billed_date }}.</p>"
+      style="cursor: pointer;">ERRORS</span>
+{% else %}
+    <span class="label label-success billing-status-detail"
+          data-title="Successfully Created {{ billable_type }} Billable"
+          data-content="<p>Billed on {{ billed_date }}.</p>"
+            style="cursor: pointer;">success</span>
+{% endif %}
+

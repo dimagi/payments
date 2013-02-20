@@ -457,7 +457,7 @@ class MachSMSRate(SMSRate):
     mcc = StringProperty()
     mnc = StringProperty()
     network = StringProperty()
-    network_surcharge = DecimalProperty()
+    network_surcharge = DecimalProperty(default=0)
 
     _admin_crud_class = MachSMSRateCRUDManager
 
@@ -576,7 +576,9 @@ class SMSBillable(Document):
 
     @property
     def converted_billable_amount(self):
-        return self.billable_amount * self.conversion_rate
+        if self.billable_amount:
+            return self.billable_amount * self.conversion_rate
+        return 0
 
     @property
     def total_billed(self):
@@ -587,14 +589,14 @@ class SMSBillable(Document):
         # Note: Not all rates have a default available
         return None
 
-    def _calculate_surcharge(self, message):
+    def calculate_surcharge(self, message):
         dimagi_rate = DimagiDomainSMSRate.get_default(direction=message.direction, domain=message.domain)
         if not dimagi_rate:
             # default rate
             dimagi_rate = DimagiDomainSMSRate.get_default(message.direction, domain="")
         self.dimagi_surcharge = dimagi_rate.base_fee if dimagi_rate else 0
 
-    def calculate_rate(self, rate_item, message, real_time=True):
+    def calculate_rate(self, rate_item, real_time=True):
         if rate_item is None:
             rate_item = self.default_rate_item
 
@@ -608,14 +610,19 @@ class SMSBillable(Document):
             self.billable_amount = 0
             self.has_error = True
             self.error_message = "Could not find rate item to match message or API response."
-        self._calculate_surcharge(message)
 
         if real_time or self.billable_date is None:
             self.billable_date = datetime.datetime.utcnow()
         self.modified_date = datetime.datetime.utcnow()
 
-        message.billed = True
-        message.save()
+        # to avoid document update conflicts.
+        try:
+            from corehq.apps.sms.models import SMSLog
+            message = SMSLog.get(self.log_id)
+            message.billed = True
+            message.save()
+        except Exception as e:
+            logging.error("Could not update SMSLog (#%s) with billable success status due to: %s" % (self.log_id, e))
 
     def save_message_info(self, message):
         self.log_id = message.get_id
@@ -673,21 +680,16 @@ class SMSBillable(Document):
 
     @classmethod
     def handle_api_response(cls, message, **kwargs):
-        if message.billing_errors:
-            logging.error("ERRORS billing SMS Message with ID %s:\n%s" % (message._id, "\n".join(message.billing_errors)))
-            message.save()
+        return NotImplementedError("Each API must be handled specifically, due to variations in responses.")
 
     @classmethod
-    def save_from_message(cls, rate_item, message):
-        billable = None
-        if rate_item:
-            billable = cls()
-            billable.save_message_info(message)
-            billable.calculate_rate(rate_item, message)
-            billable.save()
-        else:
-            message.billing_errors.append("Billing rate entry could not be found.")
-        return dict(billable=billable, message=message)
+    def new_billable(cls, rate_item, message):
+        billable = cls()
+        billable.save_message_info(message)
+        billable.calculate_surcharge(message)
+        billable.calculate_rate(rate_item)
+        billable.save()
+        return billable
 
     @staticmethod
     def api_name():
@@ -704,8 +706,13 @@ class UnicelSMSBillable(SMSBillable):
     def handle_api_response(cls, message, **kwargs):
         response = kwargs.get('response', None)
         rate_item = UnicelSMSRate.get_default(direction=message.direction)
-        if not rate_item:
-            message.billing_errors.append("No Unicel rate item could be found for key: %s" % match_key)
+        if message.direction == INCOMING:
+            result = cls.save_from_message(rate_item, message)
+            billable = result.get('billable', None)
+            if billable:
+                billable.unicel_id = "incoming"
+                billable.save()
+                return
         elif isinstance(response, str) and len(response) > 0:
             # attempt to figure out if there was an error in sending the message.
             # Look for something like '0x200 - ' in the returned string
@@ -713,26 +720,19 @@ class UnicelSMSBillable(SMSBillable):
             find_err = re.compile('\dx\d\d\d\s-\s')
             match = find_err.search(response)
             if not match:
-                result = cls.save_from_message(rate_item, message)
-                billable = result.get('billable', None)
+                billable = cls.new_billable(rate_item, message)
                 if billable:
                     billable.unicel_id = response
                     billable.save()
                     return
-                else:
-                    message.billing_errors.extend(result.get('message', []))
-            else:
-                message.billing_errors.append("Attempted to send message via UNICEL api and received errors. Client not billed. Errors: %s" % response)
         elif message.direction == INCOMING:
-            result = cls.save_from_message(rate_item, message)
-            billable = result.get('billable', None)
+            billable = cls.new_billable(rate_item, message)
             if billable:
                 billable.unicel_id = "incoming"
                 billable.save()
                 return
         else:
-            message.billing_errors.append("Attempt to send message via UNICEL api resulted in an error.")
-        super(UnicelSMSBillable, cls).handle_api_response(message, **kwargs)
+            logging.error("Attempt to send message via UNICEL api resulted in an error.")
 
     @staticmethod
     def api_name():
@@ -758,16 +758,12 @@ class TropoSMSBillable(SMSBillable):
         if successful:
             number = phonenumbers.parse(message.phone_number)
             rate_item = TropoSMSRate.get_default(direction=message.direction, country_code="%d" % number.country_code)
-            if not rate_item:
-                rate_item = TropoSMSRate.get_default(message.direction, country_code="")
-            result = cls.save_from_message(rate_item, message)
-            billable = result.get('billable', None)
+            billable = cls.new_billable(rate_item, message)
             if billable:
                 billable.tropo_id = cls.get_tropo_id(response)
                 billable.save()
         else:
-            message.billing_errors.append("An error occurred while sending a message through the Tropo API.")
-        super(TropoSMSBillable, cls).handle_api_response(message, **kwargs)
+            logging.error("An error occurred while sending a message through the Tropo API.")
 
     @classmethod
     def get_tropo_id(cls, response):
@@ -863,27 +859,28 @@ class MachSMSBillable(SMSBillable):
             if api_success:
                 test_mach_data = kwargs.get('_test_scrape')
                 mach_data = test_mach_data if test_mach_data else get_mach_data()
-                if mach_data:
-                    last_message = mach_data[0]
-                    phone_number = last_message[3]
-                    billable = cls()
-                    billable.save_message_info(message)
-                    billable.contacted_mach_api = datetime.datetime.now(tz=pytz.utc)
-                    if phone_number == message.phone_number:
-                        # same phone number, now check delivery date
-                        billable.update_mach_delivery_status(last_message)
-                    mach_number = MachPhoneNumber.get_by_number(message.phone_number, last_message)
-                    if mach_number:
-                        rate_item = MachSMSRate.get_by_number(message.direction, mach_number)
-                        billable.calculate_rate(rate_item, message)
-                    billable.save()
+                for mach_row in mach_data:
+                    phone_number = mach_row[3]
+                    if phone_number != message.phone_number:
+                        continue
+
+                    mach_number = MachPhoneNumber.get_by_number(message.phone_number, mach_row)
+                    rate_item = MachSMSRate.get_by_number(message.direction, mach_number) if mach_number else None
+
+                    billable = cls.new_billable(rate_item, message)
+                    if billable:
+                        billable.contacted_mach_api = datetime.datetime.now(tz=pytz.utc)
+                        billable.update_mach_delivery_status(mach_row)
+                        billable.save()
+                        return
+                    else:
+                        logging.error("MACH API Response was successful, but creating the MACH billable was not.")
                 else:
-                    message.billing_errors.append("There was an error retrieving message delivery information from Mach.")
+                    logging.error("There was an error retrieving message delivery information from MACH.")
             else:
-                message.billing_errors.append("There was an error accessing the MACHI API.")
+                logging.error("There was an error accessing the MACHI API.")
         else:
-            message.billing_errors.append("There was an error while trying to send an SMS to via Mach.")
-        super(MachSMSBillable, cls).handle_api_response(message, **kwargs)
+            logging.error("There was an error while trying to send an SMS to via Mach.")
 
     @staticmethod
     def api_name():
