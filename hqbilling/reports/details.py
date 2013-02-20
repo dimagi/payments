@@ -33,6 +33,7 @@ class SMSDetailReport(BillingDetailReport):
     fields = ['corehq.apps.reports.fields.DatespanField',
               'hqbilling.filters.SelectSMSBillableDomainsFilter',
               'hqbilling.fields.SelectSMSDirectionField']
+    report_template_path = "hqbilling/reports/billables_report.html"
     exportable = True
 
     project_filter_class = SelectSMSBillableDomainsFilter
@@ -51,6 +52,7 @@ class SMSDetailReport(BillingDetailReport):
             DataTablesColumn("Project"),
             DataTablesColumn("Direction"),
             DataTablesColumn("Backend API"),
+            DataTablesColumn("Billing Status"),
             DataTablesColumnGroup("Fee Breakdown",
                 DataTablesColumn("Backend Fee"),
                 DataTablesColumn("Dimagi Fee"),
@@ -80,6 +82,12 @@ class SMSDetailReport(BillingDetailReport):
                     project,
                     SMS_DIRECTIONS.get(billable.direction),
                     billable.api_name(),
+                    render_to_string("hqbilling/partials/billing_status_details.html", {
+                        'has_error': billable.has_error,
+                        'error_msg': billable.error_message,
+                        'billable_type': billable.api_name(),
+                        'billed_date': billable.billable_date.strftime("%d %b %Y at %H.%M UTC")
+                    }),
                     self._format_bill_amount(billable.converted_billable_amount),
                     self._format_bill_amount(billable.dimagi_surcharge),
                     self._format_bill_amount(billable.total_billed)

@@ -1,0 +1,12 @@
+{% extends "crud/interfaces/crud.tabular.html" %}
+
+{% block js-inline %} {{ block.super }}
+    <script type="text/javascript">
+        $(function () {
+            $('.billing-status-detail').popover({
+                trigger: 'hover',
+                html: true
+            });
+        });
+    </script>
+{% endblock %}

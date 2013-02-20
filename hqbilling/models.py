@@ -457,7 +457,7 @@ class MachSMSRate(SMSRate):
     mcc = StringProperty()
     mnc = StringProperty()
     network = StringProperty()
-    network_surcharge = DecimalProperty()
+    network_surcharge = DecimalProperty(default=0)
 
     _admin_crud_class = MachSMSRateCRUDManager
 
@@ -576,7 +576,9 @@ class SMSBillable(Document):
 
     @property
     def converted_billable_amount(self):
-        return self.billable_amount * self.conversion_rate
+        if self.billable_amount:
+            return self.billable_amount * self.conversion_rate
+        return 0
 
     @property
     def total_billed(self):
