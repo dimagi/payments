@@ -707,8 +707,7 @@ class UnicelSMSBillable(SMSBillable):
         response = kwargs.get('response', None)
         rate_item = UnicelSMSRate.get_default(direction=message.direction)
         if message.direction == INCOMING:
-            result = cls.save_from_message(rate_item, message)
-            billable = result.get('billable', None)
+            billable = cls.new_billable(rate_item, message)
             if billable:
                 billable.unicel_id = "incoming"
                 billable.save()
