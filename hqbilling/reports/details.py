@@ -92,7 +92,7 @@ class SMSDetailReport(BillingDetailReport):
                     self._format_bill_amount(billable.dimagi_surcharge),
                     self._format_bill_amount(billable.total_billed)
                 ])
-        self.total_row = ["","","","Total Billed:"]+["%.2f" % t for t in totals]
+        self.total_row = ["","","","","Total Billed:"]+["%.2f" % t for t in totals]
         return rows
 
 
