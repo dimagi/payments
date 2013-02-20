@@ -3,7 +3,6 @@ from celery.log import get_task_logger
 from celery.schedules import crontab, schedule
 from celery.task import periodic_task, task
 from django.conf import settings
-from corehq.apps.sms.models import SMSLog
 from hqbilling.models import MachSMSRate, UnicelSMSRate, TropoSMSRate, MachSMSBillable, \
     MachPhoneNumber, HQMonthlyBill, BillableCurrency
 from hqbilling.utils import get_mach_data, deal_with_delinquent_mach_billable
@@ -62,9 +61,8 @@ def update_mach_billables():
                 if phone_number == billable.phone_number:
                     mach_number = MachPhoneNumber.get_by_number(phone_number, data)
                     rate_item = MachSMSRate.get_by_number(billable.direction, mach_number)
-                    message = SMSLog.get(billable.log_id)
 
-                    billable.calculate_rate(rate_item, message)
+                    billable.calculate_rate(rate_item)
                     billable.save()
 
                     billable.update_mach_delivery_status(data)
