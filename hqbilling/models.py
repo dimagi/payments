@@ -615,14 +615,18 @@ class SMSBillable(Document):
             self.billable_date = datetime.datetime.utcnow()
         self.modified_date = datetime.datetime.utcnow()
 
+        # I'm thinking it will not be necessary to update SMSlog with billed status since the errors live in the
+        # billables and no billables are getting thrown out. There is also decent logging here. Leaving this commented
+        # out until I think about it overnight... --B
+
         # to avoid document update conflicts.
-        try:
-            from corehq.apps.sms.models import SMSLog
-            message = SMSLog.get(self.log_id)
-            message.billed = True
-            message.save()
-        except Exception as e:
-            logging.error("Could not update SMSLog (#%s) with billable success status due to: %s" % (self.log_id, e))
+        # try:
+        #     from corehq.apps.sms.models import SMSLog
+        #     message = SMSLog.get(self.log_id)
+        #     message.billed = True
+        #     message.save()
+        # except Exception as e:
+        #     logging.error("Could not update SMSLog (#%s) with billable success status due to: %s" % (self.log_id, e))
 
     def save_message_info(self, message):
         self.log_id = message.get_id
