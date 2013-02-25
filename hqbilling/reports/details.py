@@ -4,6 +4,7 @@ from django.utils.safestring import mark_safe
 from corehq.apps.reports.standard import DatespanMixin
 from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DataTablesColumnGroup, DTSortType
 from corehq.apps.reports.generic import GenericTabularReport
+from dimagi.utils.dates import DateSpan
 from dimagi.utils.decorators.memoized import memoized
 from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, SelectSMSBillableDomainsField
 from hqbilling.filters import SelectSMSBillableDomainsFilter
@@ -15,6 +16,13 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
         Base class for Billing detail reports
     """
     project_filter_class = None
+
+    @property
+    def default_datespan(self):
+        start, end = HQMonthlyBill.get_default_start_end()
+        datespan = DateSpan(start, end, format="%Y-%m-%d", timezone=self.timezone)
+        datespan.is_default = True
+        return datespan
 
     @property
     @memoized
