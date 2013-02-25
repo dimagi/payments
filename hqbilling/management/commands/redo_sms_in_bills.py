@@ -1,5 +1,6 @@
 from django.core.management.base import LabelCommand, CommandError
 import sys
+from corehq.apps.domain.models import Domain
 from hqbilling.filters import SelectSMSBillableDomainsFilter
 from hqbilling.management.commands import month_span
 from hqbilling.models import OUTGOING, INCOMING, HQMonthlyBill
