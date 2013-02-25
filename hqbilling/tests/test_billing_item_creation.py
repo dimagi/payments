@@ -260,7 +260,6 @@ class BillingItemTests(TestCase):
         log = unicel_incoming(req, delay=False)
 
         billable_items = UnicelSMSBillable.by_domain_and_direction(self.domain, INCOMING)
-        print billable_items
         if billable_items:
             billable_item = billable_items[0]
             self.assertEqual(self.unicel_incoming_rate.base_fee,
