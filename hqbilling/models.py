@@ -271,8 +271,9 @@ class HQMonthlyBill(Document):
         today = datetime.datetime.utcnow()
         (last_month_year, last_month) = add_months(today.year, today.month, -1)
         (_, last_day) = calendar.monthrange(last_month_year, last_month)
-        start_date = datetime.datetime(last_day, last_month, 1, 0, 0, 0, 0)
-        end_date = datetime.datetime(last_day, last_month, last_day, 23, 59, 59, 999999)
+        start_date = datetime.datetime(today.year, last_month, 1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = datetime.datetime(today.year, last_month, last_day,
+                                     hour=23, minute=59, second=59, microsecond=999999)
         return start_date, end_date
 
     def new_bill(self, billing_range=None):
