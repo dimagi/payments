@@ -1,10 +1,15 @@
 from django.test import TestCase
-from corehq.apps.sms.models import SMSLog, MessageLog
+from corehq.apps.domain.models import Domain
+from corehq.apps.sms.mixin import VerifiedNumber, strip_plus
+from corehq.apps.sms.models import SMSLog
+from corehq.apps.sms.util import clean_phone_number
 from corehq.apps.users.models import WebUser
 
-from corehq.apps.unicel.api import send as unicel_send, InboundParams, DATE_FORMAT, create_from_request as unicel_incoming
-from corehq.apps.tropo.api import send as tropo_send
+from corehq.apps.unicel.api import (send as unicel_send, InboundParams, DATE_FORMAT,
+                                    create_from_request as unicel_incoming, API_ID as UNICEL_API_ID)
+from corehq.apps.tropo.api import send as tropo_send, API_ID as TROPO_API_ID
 from corehq.apps.sms.mach_api import send as mach_send
+from corehq.apps.sms.api import incoming as create_incoming_msg
 
 from hqbilling.models import *
 from hqbilling.tasks import bill_client_for_sms
@@ -20,6 +25,11 @@ class BillingItemTests(TestCase):
 
     def setUp(self):
         self.domain = "biyeun"
+
+        self.domain_obj = Domain()
+        self.domain_obj.name = self.domain
+        self.domain_obj.commtrack_enabled = True
+        self.domain_obj.save()
 
         # delete any existing test SMS logs
         all_logs = SMSLog.by_domain_asc(self.domain).all()
@@ -85,9 +95,18 @@ class BillingItemTests(TestCase):
         self.tropo_rate_us.direction = OUTGOING
         self.tropo_rate_us.base_fee = 0.01
         self.tropo_rate_us.country_code = "1"
-        self.tropo_rate_us.currency_code = self.tropo_rate_any._admin_crud_class.currency_code
+        self.tropo_rate_us.currency_code = self.tropo_rate_us._admin_crud_class.currency_code
         self.tropo_rate_us.last_modified = datetime.datetime.utcnow()
         self.tropo_rate_us.save()
+
+        self.tropo_rate_incoming = TropoSMSRate()
+        self.tropo_rate_incoming.direction = INCOMING
+        self.tropo_rate_incoming.base_fee = 0.0123
+        self.tropo_rate_incoming.country_code = ""
+        self.tropo_rate_incoming.currency_code = self.tropo_rate_incoming._admin_crud_class.currency_code
+        self.tropo_rate_incoming.last_modified = datetime.datetime.utcnow()
+        self.tropo_rate_incoming.save()
+
 
         self.mach_rate = MachSMSRate()
         self.mach_rate.direction = OUTGOING
@@ -110,9 +129,38 @@ class BillingItemTests(TestCase):
         self.mach_number.network = self.mach_rate.network
         self.mach_number.save()
 
-        self.couch_user = WebUser.create(self.domain, "fakebiyeun", "test123")
-        self.couch_user.add_phone_number("+5551234567")
-        self.couch_user.save()
+
+        # FOR INCOMING UNICEL
+        # Couch User with Verified Phone Number
+        self.unicel_couch_user = WebUser.create(self.domain, "unicel_biyeun", "test123")
+        self.unicel_couch_user.add_phone_number("+919971855708")
+        self.unicel_couch_user.save()
+        # Verified Number for Incoming Unicel Message
+        self.vn_unicel = VerifiedNumber()
+        self.vn_unicel.owner_id = self.unicel_couch_user.get_id
+        self.vn_unicel.owner_doc_type = self.unicel_couch_user.__class__.__name__
+        self.vn_unicel.domain = self.domain
+        self.vn_unicel.backend_id = UNICEL_API_ID
+        self.vn_unicel.phone_number = strip_plus(clean_phone_number(self.unicel_couch_user.phone_number))
+        self.vn_unicel.verified = True
+        self.vn_unicel.save()
+
+
+        # FOR INCOMING TROPO
+        # Couch User with Verified Phone Number
+        self.tropo_couch_user = WebUser.create(self.domain, "tropo_biyeun", "test123")
+        self.tropo_couch_user.add_phone_number("+4917685675599")
+        self.tropo_couch_user.save()
+        # Verified Phone Number for Incoming Tropo Message
+        self.vn_tropo = VerifiedNumber()
+        self.vn_tropo.owner_id = self.tropo_couch_user.get_id
+        self.vn_tropo.owner_doc_type = self.tropo_couch_user.__class__.__name__
+        self.vn_tropo.domain = self.domain
+        self.vn_tropo.backend_id = TROPO_API_ID
+        self.vn_tropo.phone_number = strip_plus(clean_phone_number(self.tropo_couch_user.phone_number))
+        self.vn_tropo.verified = True
+        self.vn_tropo.save()
+
 
         self.test_message = "Test of CommCare HQ's SMS Tracking System."
         try:
@@ -131,14 +179,25 @@ class BillingItemTests(TestCase):
 
         self.dimagi_surcharge.delete()
         self.dimagi_surcharge_I.delete()
+
         self.unicel_rate.delete()
         self.unicel_incoming_rate.delete()
+
         self.tropo_rate_any.delete()
         self.tropo_rate_us.delete()
+        self.tropo_rate_incoming.delete()
+
         self.mach_rate.delete()
 
         self.mach_number.delete()
-        self.couch_user.delete()
+
+        self.unicel_couch_user.delete()
+        self.vn_unicel.delete()
+
+        self.tropo_couch_user.delete()
+        self.vn_tropo.delete()
+
+        self.domain_obj.delete()
 
     def testOutgoingUnicelApi(self):
         self.assertEqual(self.unicel_rate.conversion_rate, self.usd_rate.conversion)
@@ -149,12 +208,12 @@ class BillingItemTests(TestCase):
         msg.save()
 
         if self.sms_config and self.sms_config.get("unicel"):
-            logging.info("LIVE outgoing Unicel SMS Test.")
+            logging.info("\n\n[Billing - LIVE] UNICEL: Outgoing SMS Test.")
             msg.phone_number = self.sms_config.get("unicel")
             msg.save()
             data = unicel_send(msg, delay=False)
         else:
-            logging.info("Fake outgoing Unicel SMS Test.")
+            logging.info("\n\n[Billing] UNICEL: Outgoing SMS Test")
             data = "successful23541253235"
             msg.phone_number = "+555555555"
             msg.save()
@@ -172,16 +231,17 @@ class BillingItemTests(TestCase):
             self.assertEqual(self.unicel_rate.conversion_rate, billable_item.conversion_rate)
             self.assertEqual(self.dimagi_surcharge.base_fee, billable_item.dimagi_surcharge)
             self.assertEqual(data, billable_item.unicel_id)
-
-        updated_msg = MessageLog.get(msg.get_id)
-        if not updated_msg.billed:
-            raise Exception("There were errors creating a UNICEL billing rate!")
+            if billable_item.has_error:
+                raise Exception("There were recorded errors creating an outgoing UNICEL billing rate: %s" %
+                                billable_item.error_message)
+        else:
+            raise Exception("There were unknown errors creating an outgoing UNICEL billing rate!")
 
 
     def testIncomingUnicelApi(self):
-        logging.info("Incoming UNICEL Test.")
+        logging.info("\n\n[Billing] UNICEL: Incoming SMS Test")
         self.assertEqual(self.unicel_rate.conversion_rate, self.usd_rate.conversion)
-        fake_post = {InboundParams.SENDER: str(self.couch_user.phone_number),
+        fake_post = {InboundParams.SENDER: str(self.unicel_couch_user.phone_number),
                      InboundParams.MESSAGE: self.test_message,
                      InboundParams.TIMESTAMP: datetime.datetime.now().strftime(DATE_FORMAT),
                      InboundParams.DCS: '8',
@@ -199,10 +259,6 @@ class BillingItemTests(TestCase):
 
         log = unicel_incoming(req, delay=False)
 
-        updated_log = MessageLog.get(log.get_id)
-        if log and not updated_log.billed:
-            raise Exception("There were errors creating an incoming UNICEL billing rate!")
-
         billable_items = UnicelSMSBillable.by_domain_and_direction(self.domain, INCOMING)
         if billable_items:
             billable_item = billable_items[0]
@@ -212,7 +268,12 @@ class BillingItemTests(TestCase):
             self.assertEqual(log._id, billable_item.log_id)
             self.assertEqual(self.unicel_incoming_rate.conversion_rate, billable_item.conversion_rate)
             self.assertEqual(self.dimagi_surcharge_I.base_fee, billable_item.dimagi_surcharge)
-            self.assertEqual("incoming", billable_item.unicel_id)
+            self.assertEqual(INCOMING_MSG_ID, billable_item.unicel_id)
+            if billable_item.has_error:
+                raise Exception("There were recorded errors creating an incoming UNICEL billing rate: %s" %
+                                billable_item.error_message)
+        else:
+            raise Exception("There were unknown errors creating an incoming UNICEL billing rate!")
 
     def testOutgoingUSTropoApi(self):
         self.assertEqual(self.tropo_rate_us.conversion_rate, self.usd_rate.conversion)
@@ -223,12 +284,12 @@ class BillingItemTests(TestCase):
         msg.save()
 
         if self.sms_config and self.sms_config.get("tropo_us") and self.tropo_token:
-            logging.info("LIVE outgoing US Tropo SMS test.")
+            logging.info("\n\n[Billing - LIVE] Tropo: Outgoing US SMS Test")
             msg.phone_number = self.sms_config.get("tropo_us")
             msg.save()
             data = tropo_send(msg, delay=False, **dict(messaging_token=self.tropo_token))
         else:
-            logging.info("Fake outgoing US Tropo SMS test.")
+            logging.info("\n\n[Billing] Tropo: Outgoing US SMS Test")
             data = "<session><success>true</success><token>faketoken</token><id>aadfg3Aa321gdc8e628df2\n</id></session>"
             msg.phone_number = "+16175005454"
             msg.save()
@@ -249,10 +310,11 @@ class BillingItemTests(TestCase):
             self.assertEqual(self.dimagi_surcharge.base_fee, billable_item.dimagi_surcharge)
             self.assertEqual(tropo_id, billable_item.tropo_id)
             billable_item.delete()
-
-        updated_msg = MessageLog.get(msg.get_id)
-        if not updated_msg.billed:
-            raise Exception("There were errors creating a US TROPO billing rate!")
+            if billable_item.has_error:
+                raise Exception("There were recorded errors creating an outgoing US Tropo billing rate: %s" %
+                                billable_item.error_message)
+        else:
+            raise Exception("There were unknown errors creating an outgoing US Tropo billing rate!")
 
     def testOutgoingInternationalTropoApi(self):
         self.assertEqual(self.tropo_rate_any.conversion_rate, self.usd_rate.conversion)
@@ -263,20 +325,20 @@ class BillingItemTests(TestCase):
         msg.save()
 
         if self.sms_config and self.sms_config.get("tropo_int") and self.tropo_token:
-            logging.info("LIVE outgoing International Tropo SMS test.")
+            logging.info("\n\n[Billing - LIVE] Tropo:  Outgoing International SMS Test")
             msg.phone_number = self.sms_config.get("tropo_int")
             msg.save()
             data = tropo_send(msg, delay=False, **dict(messaging_token=self.tropo_token))
         else:
-            logging.info("Fake outgoing International Tropo SMS test.")
+            logging.info("\n\n[Billing] Tropo: Outgoing International SMS Test")
             data = "<session><success>true</success><token>faketoken</token><id>aadfg3Aa321gdc8e628df2\n</id></session>"
             msg.phone_number = "+4915253271951"
             msg.save()
             bill_client_for_sms(TropoSMSBillable, msg.get_id, **dict(response=data))
 
-        logging.info("Response from TROPO: %s" % data)
+        logging.info("[Billing] Response from TROPO: %s" % data)
         tropo_id = TropoSMSBillable.get_tropo_id(data)
-        logging.info("TROPO ID: %s" % tropo_id)
+        logging.info("[Billing] TROPO ID: %s" % tropo_id)
 
         billable_items = TropoSMSBillable.by_domain(self.domain)
         if billable_items:
@@ -289,27 +351,66 @@ class BillingItemTests(TestCase):
             self.assertEqual(self.dimagi_surcharge.base_fee, billable_item.dimagi_surcharge)
             self.assertEqual(tropo_id, billable_item.tropo_id)
             billable_item.delete()
+            if billable_item.has_error:
+                raise Exception("There were recorded errors creating an outgoing International Tropo billing rate: %s" %
+                                billable_item.error_message)
+        else:
+            raise Exception("There were unknown errors creating an outgoing International Tropo billing rate!")
 
-        updated_msg = MessageLog.get(msg.get_id)
-        if not updated_msg.billed:
-            raise Exception("There were errors creating a US TROPO billing rate!")
+    def testIncomingTropoApi(self):
+        logging.info("\n\n[Billing] Tropo: Incoming SMS Test")
+        self.assertEqual(self.tropo_rate_incoming.conversion_rate, self.usd_rate.conversion)
+        # fake_post = {InboundParams.SENDER: str(self.tropo_couch_user.phone_number),
+        #              InboundParams.MESSAGE: self.test_message,
+        #              InboundParams.TIMESTAMP: datetime.datetime.now().strftime(DATE_FORMAT),
+        #              InboundParams.DCS: '8',
+        #              InboundParams.UDHI: '0'}
+        #
+        # class FakeRequest(object):
+        #     # HACK
+        #     params = {}
+        #     @property
+        #     def REQUEST(self):
+        #         return self.params
+        #
+        # req = FakeRequest()
+        # req.params = fake_post
+
+        log = create_incoming_msg(str(self.tropo_couch_user.phone_number), self.test_message, TROPO_API_ID, delay=False)
+
+        billable_items = TropoSMSBillable.by_domain_and_direction(self.domain, INCOMING)
+
+        if billable_items:
+            billable_item = billable_items[0]
+            self.assertEqual(self.tropo_rate_incoming.base_fee, billable_item.billable_amount)
+            self.assertEqual(self.tropo_rate_incoming._id, billable_item.rate_id)
+            self.assertEqual(log._id, billable_item.log_id)
+            self.assertEqual(self.tropo_rate_incoming.conversion_rate, billable_item.conversion_rate)
+            self.assertEqual(self.dimagi_surcharge_I.base_fee, billable_item.dimagi_surcharge)
+            self.assertEqual(INCOMING_MSG_ID, billable_item.tropo_id)
+            if billable_item.has_error:
+                raise Exception("There were recorded errors creating an incoming Tropo billing rate: %s" %
+                                billable_item.error_message)
+        else:
+            raise Exception("There were unknown errors creating an incoming Tropo billing rate!")
 
 
     def testOutgoingMachApi(self):
         self.assertEqual(self.mach_rate.conversion_rate, self.eur_rate.conversion)
-        msg = SMSLog(domain = self.domain,
+        msg = SMSLog(
+            domain = self.domain,
             direction = OUTGOING,
             date = datetime.datetime.utcnow(),
             text = self.test_message)
         msg.save()
 
         if self.sms_config and self.sms_config.get("mach"):
-            logging.info("LIVE outgoing Mach SMS test.")
+            logging.info("\n\n[Billing - LIVE] MACH: Outgoing SMS test")
             msg.phone_number = self.sms_config.get("mach")
             msg.save()
             data = mach_send(msg, delay=False)
         else:
-            logging.info("Fake outgoing Mach SMS test.")
+            logging.info("\n\n[Billing] MACH: Outgoing SMS test")
             msg.phone_number = self.mach_number.phone_number
             msg.save()
             data = "MACH RESPONSE +OK 01 message queued (dest=%s)" % msg.phone_number
@@ -330,10 +431,11 @@ class BillingItemTests(TestCase):
             self.assertEqual(self.mach_rate.conversion_rate, billable_item.conversion_rate)
             self.assertEqual(self.dimagi_surcharge.base_fee, billable_item.dimagi_surcharge)
             billable_item.delete()
-
-        updated_msg = MessageLog.get(msg.get_id)
-        if not updated_msg.billed:
-            raise Exception("There were errors creating a MACH billing rate!")
+            if billable_item.has_error:
+                raise Exception("There were recorded errors creating an outgoing MACH billing rate: %s" %
+                                billable_item.error_message)
+        else:
+            raise Exception("There were unknown errors creating an outgoing MACH billing rate!")
 
 
 
