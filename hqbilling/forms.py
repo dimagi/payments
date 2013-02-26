@@ -159,6 +159,6 @@ class UpdateBillingStatusForm(forms.Form):
             domain.is_sms_billable = self.cleaned_data['is_sms_billable']
             domain.save()
             return True
-        except Exception as e:
+        except Exception:
             pass
         return False

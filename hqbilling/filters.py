@@ -13,30 +13,25 @@ class SelectSMSBillableDomainsFilter(BaseSingleOptionTypeaheadFilter):
 
     @classmethod
     def get_billable_domains(cls):
-        marked_domains = SMSBillable.get_db().view('hqbilling/sms_billable_domains',
-                                                   reduce=False,
-                                                   startkey=["marked"],
-                                                   endkey=["marked", {}]).all()
+        marked_domains = SMSBillable.get_db().view('hqbilling/domains_marked_for_billing', reduce=False).all()
 
         prev_month, _ = HQMonthlyBill.get_default_start_end()
 
-        recent = SMSBillable.get_db().view('hqbilling/sms_billable_domains',
-                                           startkey=["received", prev_month.year, prev_month.month],
-                                           endkey=["received", {}],
+        recent = SMSBillable.get_db().view('hqbilling/domains_with_billables',
+                                           startkey=[prev_month.year, prev_month.month],
                                            group=True,
-                                           group_level=4).all()
+                                           group_level=3).all()
+        print recent
         recent_counts = defaultdict(int)
         for r in recent:
             recent_counts[r['key'][-1]] += r['value']
         for m in marked_domains:
-            if m['key'][-1] not in recent_counts.keys():
-                recent_counts[m['key'][-1]] = 0
+            if m['key'] not in recent_counts.keys():
+                recent_counts[m['key']] = 0
 
-        all_time = SMSBillable.get_db().view('hqbilling/sms_billable_domains',
-                                             startkey=["received"],
-                                             endkey=["received", {}],
+        all_time = SMSBillable.get_db().view('hqbilling/domains_with_billables',
                                              group=True,
-                                             group_level=4).all()
+                                             group_level=3).all()
         all_time_counts = defaultdict(int)
         for a in all_time:
             if a['key'][-1] not in recent_counts.keys():
