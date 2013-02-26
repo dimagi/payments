@@ -58,7 +58,7 @@ class DimagiSMSRateForm(SMSRateForm):
     doc_class = DimagiDomainSMSRate
 
     #fields
-    domain = forms.CharField(label="Project Name\n (blank for any)", required=False)
+    domain = forms.CharField(label="Domain Name\n (blank for any)", required=False)
 
 
 class DomainBillingInfoForm(forms.Form):

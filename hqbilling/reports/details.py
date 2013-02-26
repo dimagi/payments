@@ -7,7 +7,8 @@ from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, D
 from corehq.apps.reports.generic import GenericTabularReport
 from dimagi.utils.dates import DateSpan
 from dimagi.utils.decorators.memoized import memoized
-from hqbilling.filters import SelectSMSBillableDomainsFilter, SelectSMSDirectionFilter
+from hqbilling.filters import (SelectSMSBillableDomainsFilter, SelectSMSDirectionFilter,
+                               SelectActivelyBillableDomainsFilter)
 from hqbilling.models import HQMonthlyBill, SMS_DIRECTIONS, SMSBillable
 from hqbilling.reports import HQBillingReport
 
@@ -31,6 +32,8 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
         domain = self.request.GET.get(self.domain_filter_class.slug)
         if domain:
             return [Domain.get_by_name(domain)]
+        if self.request.GET.get(SelectActivelyBillableDomainsFilter.slug) == 'yes':
+            return SelectActivelyBillableDomainsFilter.get_marked_domains()
         return self.domain_filter_class.get_billable_domains()
 
     def _format_bill_amount(self, amount):
@@ -40,6 +43,7 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
         return mark_safe(render_to_string('hqbilling/partials/update_client_button.html', {
             'domain':domain.name,
             'client_name': domain.billable_client,
+            "is_active": domain.is_sms_billable,
         }))
 
 
@@ -47,6 +51,7 @@ class SMSDetailReport(BillingDetailReport):
     name = "Messaging Details"
     slug = "sms_detail"
     fields = ['corehq.apps.reports.fields.DatespanField',
+              'hqbilling.filters.SelectActivelyBillableDomainsFilter',
               'hqbilling.filters.SelectSMSBillableDomainsFilter',
               'hqbilling.filters.SelectSMSDirectionFilter']
     exportable = True
@@ -115,9 +120,10 @@ class SMSDetailReport(BillingDetailReport):
 
 
 class MonthlyBillReport(BillingDetailReport):
-    name = "Monthly Bill by Project"
+    name = "Monthly Bill by Domain"
     slug = "monthly_bill"
     fields = ['corehq.apps.reports.fields.DatespanField',
+              'hqbilling.filters.SelectActivelyBillableDomainsFilter',
               'hqbilling.filters.SelectSMSBillableDomainsFilter']
     report_template_path = "hqbilling/reports/monthly_bill_summary_report.html"
 

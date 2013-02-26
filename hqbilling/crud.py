@@ -131,7 +131,7 @@ class TropoSMSRateCRUDManager(SMSRateCRUDManager):
 
     def format_property(self, key, property):
         if key == "country_code":
-            return property if property else "Applies to All Non-Matching Projects"
+            return property if property else "Applies to All Non-Matching Domains"
         return super(TropoSMSRateCRUDManager, self).format_property(key, property)
 
 
@@ -145,5 +145,5 @@ class DimagiDomainSMSRateCRUDManager(SMSRateCRUDManager):
 
     def format_property(self, key, property):
         if key == "domain":
-            return property if property else "Applies to All Non-Matching Projects"
+            return property if property else "Applies to All Non-Matching Domains"
         return super(DimagiDomainSMSRateCRUDManager, self).format_property(key, property)

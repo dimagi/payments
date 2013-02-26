@@ -45,8 +45,12 @@ class SelectSMSBillableDomainsFilter(BaseSingleOptionTypeaheadFilter):
 
     @property
     def options(self):
+        if self.request.GET.get(SelectActivelyBillableDomainsFilter.slug) == 'yes':
+            domain_list = SelectActivelyBillableDomainsFilter.get_marked_domains()
+        else:
+            domain_list = self.get_billable_domains()
         return [(domain.name, "%s [%s]" % (domain.name, domain.billable_client or "No FB Client"))
-                for domain in self.get_billable_domains()]
+                for domain in domain_list]
 
 class SelectSMSDirectionFilter(BaseSingleOptionFilter):
     slug = "direction"
@@ -56,3 +60,18 @@ class SelectSMSDirectionFilter(BaseSingleOptionFilter):
     @property
     def options(self):
         return SMS_DIRECTIONS.items()
+
+class SelectActivelyBillableDomainsFilter(BaseSingleOptionFilter):
+    slug = "is_active_bill"
+    label = "Domain's Billable Status"
+    default_text = "Any Billable Status"
+
+    @classmethod
+    def get_marked_domains(cls, as_names=False):
+        marked_domains = SMSBillable.get_db().view('hqbilling/domains_marked_for_billing', reduce=False).all()
+        marked_domains = [m['key'] for m in marked_domains]
+        return marked_domains if as_names else [Domain.get_by_name(d) for d in marked_domains]
+
+    @property
+    def options(self):
+        return [('yes', 'Show Actively Billable Only')]

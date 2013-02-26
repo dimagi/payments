@@ -26,8 +26,8 @@ var ClientInfoManager = function (o) {
     self.grabFormInfo = function () {
         self.modal.find('.modal-body').text('Loading form...');
         $.ajax({
-            dataType: 'json',
             url: self.updateClientInfoUrl+self.domain+'/',
+            dataType: 'json',
             success: self.updateForm,
             error: function () {
                 self.modal.find('.modal-body').text('Sorry, there was an error loading the form. ' +
@@ -39,8 +39,13 @@ var ClientInfoManager = function (o) {
     self.updateForm = function (data) {
         self.modal.find('.modal-body').html(data.form);
         if (data.success) {
+            // for some reason ajaxSumit does not parse the html in the JSON correctly?
+            // This is a HACK HACK HACK  after some frustration : (
+            $.getJSON(self.updateClientInfoUrl+data.domain+'/', function (data) {
+                $(".update-client-info-"+data.domain).parent().html(data.button);
+            });
             self.modal.modal('hide');
-            $(".update-client-info-"+self.domain).parent().html(data.button);
+
         }
     };
 };

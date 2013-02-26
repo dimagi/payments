@@ -1,6 +1,5 @@
 import dateutil
-from django.utils.decorators import method_decorator
-from django.views.generic import TemplateView
+from django.template import RequestContext
 from tastypie.http import HttpBadRequest
 from corehq.apps.crud.views import BaseAdminCRUDFormView
 from django.core.urlresolvers import reverse
@@ -9,8 +8,7 @@ import json
 from django.template.loader import render_to_string
 from django.shortcuts import render
 
-from corehq.apps.domain.decorators import (login_and_domain_required,
-    require_superuser)
+from corehq.apps.domain.decorators import require_superuser
 from corehq.apps.domain.models import Domain
 
 from hqbilling.forms import *
@@ -87,7 +85,7 @@ def generate_bills(request):
         end = end.replace(minute=59, hour=23, second=59, microsecond=999999)
         date_range = [start, end]
         status = "%s through %s" % (start, end)
-    except Exception:
+    except Exception as e:
         date_range = None
     generate_monthly_bills(billing_range=date_range, domain_name=domain)
     return HttpResponse("Bills generated for %s on %s." % (status, domain_status))
@@ -111,15 +109,21 @@ def update_client_info(request, domain):
             'billable_client': domain.billable_client
         })
 
-    form_response = mark_safe(render_to_string("hqbilling/forms/client_info.html", {
+    form_response = render_to_string("hqbilling/forms/client_info.html", {
         "form": client_form
-    }))
+    }, context_instance=RequestContext(request))
+
+    button_response = render_to_string("hqbilling/partials/update_client_button.html", {
+        "domain": domain.name,
+        "client_name": domain.billable_client,
+        "is_active": domain.is_sms_billable,
+    })
 
     return HttpResponse(json.dumps({
         'form': form_response,
         'success': success,
         'domain': domain.name,
-        'button': domain.billable_client,
+        'button': button_response,
     }))
 
 #

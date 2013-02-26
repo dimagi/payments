@@ -48,7 +48,7 @@ def bill_client_for_sms(klass, message_id, **kwargs):
     except Exception as e:
         logging.exception("Failed create billable item from message %s.\n ERROR: %s" % (message, e))
 
-@periodic_task(run_every=crontab(minute=0, hour=0))
+@periodic_task(run_every=crontab(minute=0, hour='*/12'))
 def update_mach_billables():
     mach_data = get_mach_data(days=3)
     try:
@@ -89,6 +89,7 @@ def update_mach_billables():
 
 @periodic_task(run_every=first_of_month())
 def generate_monthly_bills(billing_range=None, domain_name=None):
+    logging.info("[Billing] Generating Monthly Bills")
     from corehq.apps.domain.models import Domain
     domains = [Domain.get_by_name(domain_name)] if domain_name is not None else Domain.get_all()
     for domain in domains:

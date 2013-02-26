@@ -319,9 +319,10 @@ class HQMonthlyBill(Document):
             # save only the bills with costs attached so that there isn't a long list
             # of non-actionable bills at the end
             bill.save()
-            logging.info("[BILLING] Bill for project %s was created." % domain)
+            logging.info("[BILLING] Bill for domain %s was created." % domain)
         else:
-            logging.info("[BILLING] No Bill for project %s was created." % domain)
+            logging.info("[BILLING] No Bill for domain %s was created. "
+                         "The there was no billable amount for outgoing or incoming SMS" % domain)
         return bill
 
 
@@ -354,6 +355,8 @@ class BillableCurrency(Document, AdminCRUDDocumentMixin):
             self.conversion = float(data)
         except Exception as e:
             self.conversion = 0.0
+            logging.error("[Billing] There was an error retrieving the conversion rate from %s to %s using %s: %s"
+                          % (from_currency, to_currency, conversion_url, e))
             conversion_url = "ERROR: %s, %s" % (e, conversion_url)
         self.source = conversion_url
 
