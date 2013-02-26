@@ -1,10 +1,14 @@
 import dateutil
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView
+from tastypie.http import HttpBadRequest
 from corehq.apps.crud.views import BaseAdminCRUDFormView
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound, Http404
 import json
 from django.template.loader import render_to_string
 from corehq.apps.domain.decorators import require_superuser
+from corehq.apps.domain.models import Domain
 from dimagi.utils.web import render_to_response
 from hqbilling.forms import *
 from hqbilling.models import *
@@ -84,6 +88,36 @@ def generate_bills(request):
         date_range = None
     generate_monthly_bills(billing_range=date_range, domain_name=domain)
     return HttpResponse("Bills generated for %s on %s." % (status, domain_status))
+
+
+@require_superuser
+def update_client_info(request, domain):
+    try:
+        domain = Domain.get_by_name(domain)
+    except Exception as e:
+        return HttpBadRequest("Could not fetch domain due to %s" % e)
+
+    success = False
+    if request.method == "POST":
+        client_form = UpdateBillingStatusForm(request.POST)
+        if client_form.is_valid():
+            success = client_form.save(domain)
+    else:
+        client_form = UpdateBillingStatusForm(initial={
+            'is_sms_billable': domain.is_sms_billable,
+            'billable_client': domain.billable_client
+        })
+
+    form_response = mark_safe(render_to_string("hqbilling/forms/client_info.html", {
+        "form": client_form
+    }))
+
+    return HttpResponse(json.dumps({
+        'form': form_response,
+        'success': success,
+        'domain': domain.name,
+        'button': domain.billable_client,
+    }))
 
 #
 #def deltestdata(request):

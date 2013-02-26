@@ -1,12 +1,13 @@
 from django.core.urlresolvers import reverse
 from django.template.loader import render_to_string
 from django.utils.safestring import mark_safe
+from corehq.apps.domain.models import Domain
 from corehq.apps.reports.standard import DatespanMixin
 from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader, DataTablesColumnGroup, DTSortType
 from corehq.apps.reports.generic import GenericTabularReport
+from dimagi.utils.dates import DateSpan
 from dimagi.utils.decorators.memoized import memoized
-from hqbilling.fields import SelectSMSDirectionField, SelectBilledDomainsField, SelectSMSBillableDomainsField
-from hqbilling.filters import SelectSMSBillableDomainsFilter
+from hqbilling.filters import SelectSMSBillableDomainsFilter, SelectSMSDirectionFilter
 from hqbilling.models import HQMonthlyBill, SMS_DIRECTIONS, SMSBillable
 from hqbilling.reports import HQBillingReport
 
@@ -14,17 +15,32 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
     """
         Base class for Billing detail reports
     """
-    project_filter_class = None
+    domain_filter_class = None
+    report_template_path = "hqbilling/reports/detail_reports.html"
+
+    @property
+    def default_datespan(self):
+        start, end = HQMonthlyBill.get_default_start_end()
+        datespan = DateSpan(start, end, format="%Y-%m-%d", timezone=self.timezone)
+        datespan.is_default = True
+        return datespan
 
     @property
     @memoized
-    def projects(self):
-        project = self.request.GET.get(self.project_filter_class.slug)
-        all_projects = [d.name for d in self.project_filter_class.get_billable_domains()]
-        return [project] if project else all_projects
+    def domains(self):
+        domain = self.request.GET.get(self.domain_filter_class.slug)
+        if domain:
+            return [Domain.get_by_name(domain)]
+        return self.domain_filter_class.get_billable_domains()
 
     def _format_bill_amount(self, amount):
         return self.table_cell(amount, "$ %.2f" % amount)
+
+    def _format_client(self, domain):
+        return mark_safe(render_to_string('hqbilling/partials/update_client_button.html', {
+            'domain':domain.name,
+            'client_name': domain.billable_client,
+        }))
 
 
 class SMSDetailReport(BillingDetailReport):
@@ -32,24 +48,24 @@ class SMSDetailReport(BillingDetailReport):
     slug = "sms_detail"
     fields = ['corehq.apps.reports.fields.DatespanField',
               'hqbilling.filters.SelectSMSBillableDomainsFilter',
-              'hqbilling.fields.SelectSMSDirectionField']
-    report_template_path = "hqbilling/reports/billables_report.html"
+              'hqbilling.filters.SelectSMSDirectionFilter']
     exportable = True
 
-    project_filter_class = SelectSMSBillableDomainsFilter
+    domain_filter_class = SelectSMSBillableDomainsFilter
 
     description = "See all the SMS messages sent during a time frame, per domain, and per direction."
 
     @property
     @memoized
     def direction(self):
-        return self.request.GET.get(SelectSMSDirectionField.slug)
+        return self.request.GET.get(SelectSMSDirectionFilter.slug)
 
     @property
     def headers(self):
         return DataTablesHeader(
             DataTablesColumn("Date", sort_type=DTSortType.DATE),
-            DataTablesColumn("Project"),
+            DataTablesColumn("Client"),
+            DataTablesColumn("Domain"),
             DataTablesColumn("Direction"),
             DataTablesColumn("Backend API"),
             DataTablesColumn("Billing Status"),
@@ -64,12 +80,12 @@ class SMSDetailReport(BillingDetailReport):
     def rows(self):
         rows = []
         totals = [0,0,0]
-        for project in self.projects:
+        for domain in self.domains:
             if self.direction:
-                billables = SMSBillable.by_domain_and_direction(project, self.direction,
+                billables = SMSBillable.by_domain_and_direction(domain.name, self.direction,
                     start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc)
             else:
-                billables = SMSBillable.by_domain(project,
+                billables = SMSBillable.by_domain(domain.name,
                     start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc)
 
             for billable in billables:
@@ -79,35 +95,39 @@ class SMSDetailReport(BillingDetailReport):
                 rows.append([
                     self.table_cell(billable.billable_date.isoformat(),
                         billable.billable_date.strftime("%B %d, %Y %H:%M:%S")),
-                    project,
+                    self._format_client(domain),
+                    domain.name,
                     SMS_DIRECTIONS.get(billable.direction),
                     billable.api_name(),
                     render_to_string("hqbilling/partials/billing_status_details.html", {
                         'has_error': billable.has_error,
                         'error_msg': billable.error_message,
                         'billable_type': billable.api_name(),
-                        'billed_date': billable.billable_date.strftime("%d %b %Y at %H.%M UTC")
+                        'billed_date': billable.billable_date.strftime("%d %b %Y at %H.%M UTC"),
+                        'billable_id': billable._id,
                     }),
                     self._format_bill_amount(billable.converted_billable_amount),
                     self._format_bill_amount(billable.dimagi_surcharge),
                     self._format_bill_amount(billable.total_billed)
                 ])
-        self.total_row = ["","","","","Total Billed:"]+["%.2f" % t for t in totals]
+        self.total_row = ["", "", "", "", "", "Total Billed:"] + ["%.2f" % t for t in totals]
         return rows
 
 
 class MonthlyBillReport(BillingDetailReport):
     name = "Monthly Bill by Project"
     slug = "monthly_bill"
-    fields = ['hqbilling.fields.DatespanBillingStartField',
+    fields = ['corehq.apps.reports.fields.DatespanField',
               'hqbilling.filters.SelectSMSBillableDomainsFilter']
     report_template_path = "hqbilling/reports/monthly_bill_summary_report.html"
 
-    project_filter_class = SelectSMSBillableDomainsFilter
+    domain_filter_class = SelectSMSBillableDomainsFilter
 
     @property
     def headers(self):
-        return DataTablesHeader(DataTablesColumn("Project"),
+        return DataTablesHeader(
+            DataTablesColumn("Domain"),
+            DataTablesColumn("Client"),
             DataTablesColumnGroup("Billing Period",
                 DataTablesColumn("Start"),
                 DataTablesColumn("End"),
@@ -128,8 +148,8 @@ class MonthlyBillReport(BillingDetailReport):
     def rows(self):
         rows = []
 
-        for project in self.projects:
-            all_bills = HQMonthlyBill.get_bills(project,
+        for domain in self.domains:
+            all_bills = HQMonthlyBill.get_bills(domain.name,
                 start=self.datespan.startdate_param_utc,
                 end=self.datespan.enddate_param_utc
             ).all()
@@ -137,7 +157,8 @@ class MonthlyBillReport(BillingDetailReport):
                 nice_start = bill.billing_period_start.strftime("%B %d, %Y")
                 nice_end = bill.billing_period_end.strftime("%B %d, %Y")
                 rows.append([
-                    project,
+                    domain.name,
+                    self._format_client(domain),
                     self.table_cell(
                         bill.billing_period_start,
                         nice_start
@@ -159,7 +180,7 @@ class MonthlyBillReport(BillingDetailReport):
                             'button_class': "btn-success paid" if bill.paid else "btn-danger",
                             'billing_start': nice_start,
                             'billing_end': nice_end,
-                            'domain': project,
+                            'domain': domain.name,
                         }))
                     ),
                     mark_safe('<a href="%s" class="btn btn-primary">View Invoice</a>' %

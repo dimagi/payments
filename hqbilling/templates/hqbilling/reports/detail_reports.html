@@ -1,0 +1,30 @@
+{% extends 'reports/async/tabular.html' %}
+{% load hq_shared_tags %}
+
+{% block posttable %}{{ block.super }}
+    <div class="modal hide fade" id="updateClientInfoModal">
+        <div class="modal-header">
+            <a class="close" data-dismiss="modal">&times;</a>
+            <h3>Update Client Information <small>Domain</small></h3>
+        </div>
+        <form class="form form-horizontal" action="" method="post" enctype="multipart/form-data">
+            <div class="modal-body">
+
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">Update Client Info</button>
+                <button class="btn" data-dismiss="modal">Close</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+
+{% block js %} {{ block.super }}
+    <script type="text/javascript" src="{% static 'hqbilling/js/client_info.js' %}"></script>
+{% endblock %}
+
+{% block js-inline %}{{ block.super }}
+    <script type="text/javascript">
+        var client_info = new ClientInfoManager({});
+    </script>
+{% endblock %}

@@ -4,10 +4,9 @@ from hqbilling.views import BillingAdminCRUDFormView
 
 urlpatterns = patterns('hqbilling.views',
     url(r'^$', "default_billing_report", name="billing_default"),
+    url(r'^update_client/(?P<domain>[\w-]+)/$', "update_client_info", name="billing_update_client"),
     url(r'^bill/generate/$', "generate_bills", name="generate_monthly_bill"),
-    url(BillingInterfaceDispatcher.pattern(), BillingInterfaceDispatcher.as_view(),
-        name=BillingInterfaceDispatcher.name()
-    ),
+
     url(r'^form/(?P<form_type>[\w_]+)/(?P<action>[(update)|(new)|(delete)]+)/((?P<item_id>[\w_]+)/)?$',
         BillingAdminCRUDFormView.as_view(), name="billing_item_form"),
 
@@ -29,5 +28,9 @@ urlpatterns = patterns('hqbilling.views',
 
     url(r'^bill/status/(?P<bill_id>[\w-]+)/(?P<status>[(yes)|(no)]+)/$', 'bill_status_update',
         name='billing_update_bill'),
+
+    url(BillingInterfaceDispatcher.pattern(), BillingInterfaceDispatcher.as_view(),
+        name=BillingInterfaceDispatcher.name()
+    ),
 
 )
