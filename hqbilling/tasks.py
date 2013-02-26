@@ -48,7 +48,7 @@ def bill_client_for_sms(klass, message_id, **kwargs):
     except Exception as e:
         logging.exception("Failed create billable item from message %s.\n ERROR: %s" % (message, e))
 
-@periodic_task(run_every=crontab(minute=0, hour=0))
+@periodic_task(run_every=crontab(minute=0, hour='*/6'))
 def update_mach_billables():
     mach_data = get_mach_data(days=3)
     try:
