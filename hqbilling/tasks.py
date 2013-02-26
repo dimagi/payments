@@ -89,6 +89,7 @@ def update_mach_billables():
 
 @periodic_task(run_every=first_of_month())
 def generate_monthly_bills(billing_range=None, domain_name=None):
+    logging.info("[Billing] Generating Monthly Bills")
     from corehq.apps.domain.models import Domain
     domains = [Domain.get_by_name(domain_name)] if domain_name is not None else Domain.get_all()
     for domain in domains:

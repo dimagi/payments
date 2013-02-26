@@ -321,7 +321,8 @@ class HQMonthlyBill(Document):
             bill.save()
             logging.info("[BILLING] Bill for project %s was created." % domain)
         else:
-            logging.info("[BILLING] No Bill for project %s was created." % domain)
+            logging.info("[BILLING] No Bill for project %s was created. "
+                         "The there was no billable amount for outgoing or incoming SMS" % domain)
         return bill
 
 
