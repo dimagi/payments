@@ -1,3 +1,6 @@
+<div class="pull-right">
+    {{ bill.html_dimagi_address }}
+</div>
 <section id="itemized_content">
     <div class="page-header">
         <h1 style="clear: both; ">Itemized Statement</h1>
@@ -41,6 +44,7 @@
                             <th class="span2">No.</th>
                             <th class="span7">User Name</th>
                             <th class="span3">No. Submissions</th>
+                            <th class="span3">Cost Per User</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -55,6 +59,7 @@
                         </tbody>
                         <tfoot>
                             <tr>
+                                <td></td>
                                 <td></td>
                                 <th style="text-align: right;">Hosting Fee Total</th>
                                 <th>{{ itemized.users_total }}</th>

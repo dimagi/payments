@@ -1,62 +1,26 @@
-from corehq.apps.domain.models import Domain
-from dimagi.utils.modules import to_function
-from django.conf import settings
-from django.contrib import messages
+import dateutil
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView
+from tastypie.http import HttpBadRequest
+from corehq.apps.crud.views import BaseAdminCRUDFormView
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound, Http404
 import json
 from django.template.loader import render_to_string
 from django.shortcuts import render
 
-from corehq.apps.domain.decorators import login_and_domain_required, require_superuser
-from corehq.apps.reports.views import datespan_default
+from corehq.apps.domain.decorators import (login_and_domain_required,
+    require_superuser)
+from corehq.apps.domain.models import Domain
+
 from hqbilling.forms import *
 from hqbilling.models import *
+from hqbilling.tasks import generate_monthly_bills
 
 @require_superuser
 def default_billing_report(request):
     from hqbilling.reports.details import MonthlyBillReport
     return HttpResponseRedirect(MonthlyBillReport.get_url())
-
-@require_superuser
-def updatable_item_form(request, form, item_type="",
-                      item_id="", template="hqbilling/forms/new_rate.html"):
-    form_class = eval(form)
-    form = form_class()
-    success = False
-    delete_item  = request.GET.get('delete')
-    did_delete = False
-    item_result = []
-
-    if item_id and item_type:
-        # this is an update of an existing item
-        item_type = eval(item_type)
-        existing_item = item_type.get(item_id)
-        if delete_item:
-            existing_item.delete()
-            success = True
-            did_delete = True
-        elif request.method == 'POST':
-            form = form_class(request.POST, item_id=existing_item.get_id)
-            if form.is_valid():
-                item_result = form.update(existing_item)
-                success = True
-        else:
-            form = form_class(existing_item._doc, item_id=existing_item.get_id)
-    elif request.method == 'POST':
-        form = form_class(request.POST)
-        if form.is_valid():
-            item_result = form.save()
-            form = form_class()
-            success = True
-
-    context = dict(form=form)
-    return HttpResponse(json.dumps(dict(
-            success=success,
-            deleted=did_delete,
-            form_update=render_to_string(template, context),
-            rows=item_result
-        )))
 
 @require_superuser
 def bill_invoice(request, bill_id,
@@ -105,7 +69,58 @@ def bill_status_update(request, bill_id, status):
         bill_id=bill_id
     )))
 
+class BillingAdminCRUDFormView(BaseAdminCRUDFormView):
+    base_loc = "hqbilling.forms"
 
+    def is_form_class_valid(self, form_class):
+        # todo
+        return True
+
+@require_superuser
+def generate_bills(request):
+    status = "Last Month"
+    domain = request.GET.get('domain')
+    domain_status = domain or "all domains"
+    try:
+        start = dateutil.parser.parse(request.GET.get('start'))
+        end = dateutil.parser.parse(request.GET.get('end'))
+        end = end.replace(minute=59, hour=23, second=59, microsecond=999999)
+        date_range = [start, end]
+        status = "%s through %s" % (start, end)
+    except Exception:
+        date_range = None
+    generate_monthly_bills(billing_range=date_range, domain_name=domain)
+    return HttpResponse("Bills generated for %s on %s." % (status, domain_status))
+
+
+@require_superuser
+def update_client_info(request, domain):
+    try:
+        domain = Domain.get_by_name(domain)
+    except Exception as e:
+        return HttpBadRequest("Could not fetch domain due to %s" % e)
+
+    success = False
+    if request.method == "POST":
+        client_form = UpdateBillingStatusForm(request.POST)
+        if client_form.is_valid():
+            success = client_form.save(domain)
+    else:
+        client_form = UpdateBillingStatusForm(initial={
+            'is_sms_billable': domain.is_sms_billable,
+            'billable_client': domain.billable_client
+        })
+
+    form_response = mark_safe(render_to_string("hqbilling/forms/client_info.html", {
+        "form": client_form
+    }))
+
+    return HttpResponse(json.dumps({
+        'form': form_response,
+        'success': success,
+        'domain': domain.name,
+        'button': domain.billable_client,
+    }))
 
 #
 #def deltestdata(request):

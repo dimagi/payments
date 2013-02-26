@@ -1,4 +1,4 @@
-{% extends "reports/async/tabular.html" %}
+{% extends "hqbilling/reports/detail_reports.html" %}
 {% load hq_shared_tags %}
 
 {% block js %} {{ block.super }}
@@ -11,7 +11,7 @@
     </script>
 {% endblock %}
 
-{% block modals %} {{ block.super }}
+{% block posttable %} {{ block.super }}
     <div class="modal hide fade" id="changePaymentStatusModal">
         <div class="modal-header">
             <a class="close" data-dismiss="modal">&times;</a>

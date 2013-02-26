@@ -1,14 +1,17 @@
 from corehq.apps.reports.datatables import DataTablesColumn, DataTablesHeader
 from hqbilling.forms import TaxRateUpdateForm, BillableCurrencyUpdateForm
 from hqbilling.models import TaxRateByCountry, BillableCurrency
-from hqbilling.reports import UpdatableItem
+from hqbilling.reports import BaseBillingAdminInterface
 
 
-class BillableCurrencyReport(UpdatableItem):
+class BillableCurrencyReport(BaseBillingAdminInterface):
     slug = "billable_currency"
     name = "Billable Currencies"
+
+    document_class = BillableCurrency
     form_class = BillableCurrencyUpdateForm
-    item_class = BillableCurrency
+
+    description = "Currencies that we can send bills in and that project administrators can choose when adding domain details."
 
     @property
     def headers(self):
@@ -22,14 +25,25 @@ class BillableCurrencyReport(UpdatableItem):
         return headers
 
     @property
-    def status_message(self):
-        return None
+    def rows(self):
+        rows = []
+        for currency in self.currencies:
+            rows.append(currency.admin_crud.row)
+        return rows
 
-class TaxRateReport(UpdatableItem):
+    @property
+    def currencies(self):
+        return self.document_class.get_all().all()
+
+
+class TaxRateReport(BaseBillingAdminInterface):
     slug = "tax_rate"
     name = "Tax Rates by Country"
+
+    document_class = TaxRateByCountry
     form_class = TaxRateUpdateForm
-    item_class = TaxRateByCountry
+
+    description = "Tax rates we want to apply to bill totals based on country."
 
     @property
     def headers(self):
@@ -41,7 +55,17 @@ class TaxRateReport(UpdatableItem):
         return headers
 
     @property
-    def status_message(self):
-        return None
+    def rows(self):
+        rows = []
+        for rate in self.tax_rates:
+            rows.append(rate.admin_crud.row)
+        return rows
+
+    @property
+    def tax_rates(self):
+        return self.document_class.view("hqbilling/tax_rates",
+            include_docs=True,
+            reduce=False
+        ).all()
 
 

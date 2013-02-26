@@ -1,0 +1,7 @@
+<span>{% if client_name %}{{ client_name }}{% else %}<small class="muted">No FB Client</small>{% endif %}</span>
+<a href="#updateClientInfoModal"
+   onclick="client_info.updateModalForm('{{ domain }}')"
+   data-toggle="modal"
+   class="btn btn-primary btn-mini pull-right update-client-info-{{ domain }}">
+    Update
+</a>

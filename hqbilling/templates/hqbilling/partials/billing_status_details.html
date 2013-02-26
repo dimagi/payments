@@ -1,0 +1,22 @@
+{% if has_error %}
+    <span id="{{ billable_id }}"
+      class="label label-important billing-status-detail"
+      data-title="Error creating {{ billable_type }} Billable"
+      data-content="<p>{{ error_msg }}</p><p>No carrier charge was applied. Last attempt to bill was {{ billed_date }}.</p>"
+      style="cursor: pointer;">ERRORS</span>
+{% else %}
+    <span id="{{ billable_id }}"
+          class="label label-success billing-status-detail"
+          data-title="Successfully Created {{ billable_type }} Billable"
+          data-content="<p>Billed on {{ billed_date }}.</p>"
+            style="cursor: pointer;">success</span>
+{% endif %}
+<script type="text/javascript">
+    $(function () {
+        $('#{{ billable_id }}').popover({
+            trigger: 'hover',
+            html: true
+        });
+    });
+</script>
+

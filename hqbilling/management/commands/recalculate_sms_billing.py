@@ -5,7 +5,7 @@ import sys
 from corehq.apps.domain.models import Domain
 from corehq.apps.sms.models import MessageLog
 from dimagi.utils.modules import to_function
-from hqbilling.fields import SelectSMSBillableDomainsField
+from hqbilling.filters import SelectSMSBillableDomainsFilter
 from hqbilling.management.commands import month_span
 from hqbilling.models import SMSBillable, SMSRate
 
@@ -19,22 +19,21 @@ class Command(LabelCommand):
             raise CommandError("year and month are required")
 
         if len(args) > 2:
-            domains = [args[2]]
+            domains = [Domain.get_by_name(args[2])]
         else:
-            domains = SelectSMSBillableDomainsField.get_billable_domains()
+            domains = SelectSMSBillableDomainsFilter.get_billable_domains()
 
         first_day, last_day = month_span(int(args[0]), int(args[1]))
         print "\nRecalculating SMS Billables\n----\n"
         for domain in domains:
-            billables_for_domain = SMSBillable.by_domain(domain,
+            billables_for_domain = SMSBillable.by_domain(domain.name,
                 start=first_day.isoformat(), end=last_day.isoformat()).all()
-            print "Found %d SMS Billables for domain %s" % (len(billables_for_domain), domain)
+            print "Found %d SMS Billables for domain %s" % (len(billables_for_domain), domain.name)
             for billable in billables_for_domain:
-                message_log = MessageLog.get(billable.log_id)
                 rate_doc = SMSRate.get_db().get(billable.rate_id)
                 rate_class = to_function("hqbilling.models.%s" % rate_doc.get('doc_type', 'SMSRate'))
                 rate_item = rate_class.get(rate_doc['_id'])
-                billable.calculate_rate(rate_item, message_log, real_time=False)
+                billable.calculate_rate(rate_item, real_time=False)
                 billable.save()
                 sys.stdout.write(".")
                 sys.stdout.flush()
