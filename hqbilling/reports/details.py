@@ -120,7 +120,7 @@ class SMSDetailReport(BillingDetailReport):
 
 
 class MonthlyBillReport(BillingDetailReport):
-    name = "Monthly Bill by Project"
+    name = "Monthly Bill by Domain"
     slug = "monthly_bill"
     fields = ['corehq.apps.reports.fields.DatespanField',
               'hqbilling.filters.SelectActivelyBillableDomainsFilter',

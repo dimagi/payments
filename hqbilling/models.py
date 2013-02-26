@@ -319,9 +319,9 @@ class HQMonthlyBill(Document):
             # save only the bills with costs attached so that there isn't a long list
             # of non-actionable bills at the end
             bill.save()
-            logging.info("[BILLING] Bill for project %s was created." % domain)
+            logging.info("[BILLING] Bill for domain %s was created." % domain)
         else:
-            logging.info("[BILLING] No Bill for project %s was created. "
+            logging.info("[BILLING] No Bill for domain %s was created. "
                          "The there was no billable amount for outgoing or incoming SMS" % domain)
         return bill
 

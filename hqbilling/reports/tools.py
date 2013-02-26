@@ -11,7 +11,8 @@ class BillableCurrencyReport(BaseBillingAdminInterface):
     document_class = BillableCurrency
     form_class = BillableCurrencyUpdateForm
 
-    description = "Currencies that we can send bills in and that project administrators can choose when adding domain details."
+    description = "Currencies that we can send bills in and that domain" \
+                  " administrators can choose when adding domain details."
 
     @property
     def headers(self):
