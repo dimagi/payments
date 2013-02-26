@@ -125,7 +125,7 @@ class UnicelRateReport(BaseSMSRateReport):
     form_class = UnicelSMSRateForm
 
     detailed_description = mark_safe("""
-        <p>Tropo rates are in USD.</p>
+        <p>Unicel rates are in USD.</p>
     """)
 
     @property
