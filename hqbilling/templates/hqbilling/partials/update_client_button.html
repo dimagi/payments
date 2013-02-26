@@ -1,4 +1,4 @@
-<span{% if is_active %} class="label label-success"{% endif %}>{% if client_name %}>{{ client_name }}{% else %}<small class="muted">No FB Client</small>{% endif %}</span>
+<span{% if is_active %} class="label label-success"{% endif %}>{% if client_name %}{{ client_name }}{% else %}<small class="muted">No FB Client</small>{% endif %}</span>
 <a href="#updateClientInfoModal"
    onclick="client_info.updateModalForm('{{ domain }}')"
    data-toggle="modal"
