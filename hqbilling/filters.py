@@ -21,7 +21,7 @@ class SelectSMSBillableDomainsFilter(BaseSingleOptionTypeaheadFilter):
                                            startkey=[prev_month.year, prev_month.month],
                                            group=True,
                                            group_level=3).all()
-        print recent
+        
         recent_counts = defaultdict(int)
         for r in recent:
             recent_counts[r['key'][-1]] += r['value']
