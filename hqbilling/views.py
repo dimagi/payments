@@ -7,9 +7,12 @@ from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound, Http404
 import json
 from django.template.loader import render_to_string
-from corehq.apps.domain.decorators import require_superuser
+from django.shortcuts import render
+
+from corehq.apps.domain.decorators import (login_and_domain_required,
+    require_superuser)
 from corehq.apps.domain.models import Domain
-from dimagi.utils.web import render_to_response
+
 from hqbilling.forms import *
 from hqbilling.models import *
 from hqbilling.tasks import generate_monthly_bills
@@ -39,7 +42,7 @@ def bill_invoice(request, bill_id,
     else:
         printable_url = reverse("billing_invoice_print", kwargs=dict(bill_id=bill_id))
 
-    return render_to_response(request, template, dict(
+    return render(request, template, dict(
         slug=MonthlyBillReport.slug,
         partial=partial,
         parent_link=parent_link,
