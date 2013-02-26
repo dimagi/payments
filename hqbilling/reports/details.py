@@ -16,6 +16,7 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
         Base class for Billing detail reports
     """
     domain_filter_class = None
+    report_template_path = "hqbilling/reports/detail_reports.html"
 
     @property
     def default_datespan(self):
@@ -34,6 +35,12 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
 
     def _format_bill_amount(self, amount):
         return self.table_cell(amount, "$ %.2f" % amount)
+
+    def _format_client(self, domain):
+        return mark_safe(render_to_string('hqbilling/partials/update_client_button.html', {
+            'domain':domain.name,
+            'client_name': domain.billable_client,
+        }))
 
 
 class SMSDetailReport(BillingDetailReport):
@@ -88,7 +95,7 @@ class SMSDetailReport(BillingDetailReport):
                 rows.append([
                     self.table_cell(billable.billable_date.isoformat(),
                         billable.billable_date.strftime("%B %d, %Y %H:%M:%S")),
-                    domain.billable_client,
+                    self._format_client(domain),
                     domain.name,
                     SMS_DIRECTIONS.get(billable.direction),
                     billable.api_name(),
@@ -103,7 +110,7 @@ class SMSDetailReport(BillingDetailReport):
                     self._format_bill_amount(billable.dimagi_surcharge),
                     self._format_bill_amount(billable.total_billed)
                 ])
-        self.total_row = ["","","","","Total Billed:"]+["%.2f" % t for t in totals]
+        self.total_row = ["", "", "", "", "", "Total Billed:"] + ["%.2f" % t for t in totals]
         return rows
 
 
@@ -119,8 +126,8 @@ class MonthlyBillReport(BillingDetailReport):
     @property
     def headers(self):
         return DataTablesHeader(
-            DataTablesColumn("Client"),
             DataTablesColumn("Domain"),
+            DataTablesColumn("Client"),
             DataTablesColumnGroup("Billing Period",
                 DataTablesColumn("Start"),
                 DataTablesColumn("End"),
@@ -150,8 +157,8 @@ class MonthlyBillReport(BillingDetailReport):
                 nice_start = bill.billing_period_start.strftime("%B %d, %Y")
                 nice_end = bill.billing_period_end.strftime("%B %d, %Y")
                 rows.append([
-                    domain.billable_client,
                     domain.name,
+                    self._format_client(domain),
                     self.table_cell(
                         bill.billing_period_start,
                         nice_start

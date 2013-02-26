@@ -144,3 +144,21 @@ class MachExcelFileUploadForm(forms.Form):
                 except AttributeError:
                     pass
             mach_rate.save()
+
+
+class UpdateBillingStatusForm(forms.Form):
+    """
+        This form will update the billing status of a domain.
+    """
+    is_sms_billable = forms.BooleanField(label="Actively Billable", required=False)
+    billable_client = forms.CharField(label="FogBugz Client Name", required=False)
+
+    def save(self, domain):
+        try:
+            domain.billable_client = self.cleaned_data['billable_client']
+            domain.is_sms_billable = self.cleaned_data['is_sms_billable']
+            domain.save()
+            return True
+        except Exception as e:
+            pass
+        return False
