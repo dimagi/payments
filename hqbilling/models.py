@@ -608,6 +608,10 @@ class SMSBillable(Document):
         # Note: Not all rates have a default available
         return None
 
+    @property
+    def throw_error_on_rateless(self):
+        return True
+
     def calculate_surcharge(self, message):
         dimagi_rate = DimagiDomainSMSRate.get_default(direction=message.direction, domain=message.domain)
         if not dimagi_rate:
@@ -629,26 +633,15 @@ class SMSBillable(Document):
             self.rate_id = UNKNOWN_RATE_ID
             self.conversion_rate = 1
             self.billable_amount = 0
-            self.has_error = True
-            self.error_message = "Could not find rate item to match message or API response."
-            logging.error("[Billing] No SMS Rate Item Found for SMSLog # %s | %s" % (self.log_id, self))
+            if self.throw_error_on_rateless:
+                self.has_error = True
+                self.error_message = "Could not find rate item to match message or API response."
+                logging.error("[Billing] No SMS Rate Item Found for SMSLog # %s | %s | %s" %
+                              (self.log_id, self._id, self))
 
         if real_time or self.billable_date is None:
             self.billable_date = datetime.datetime.utcnow()
         self.modified_date = datetime.datetime.utcnow()
-
-        # I'm thinking it will not be necessary to update SMSlog with billed status since the errors live in the
-        # billables and no billables are getting thrown out. There is also decent logging here. Leaving this commented
-        # out until I think about it overnight... --B
-
-        # to avoid document update conflicts.
-        # try:
-        #     from corehq.apps.sms.models import SMSLog
-        #     message = SMSLog.get(self.log_id)
-        #     message.billed = True
-        #     message.save()
-        # except Exception as e:
-        #     logging.error("Could not update SMSLog (#%s) with billable success status due to: %s" % (self.log_id, e))
 
     def save_message_info(self, message):
         self.log_id = message.get_id
@@ -821,6 +814,13 @@ class MachSMSBillable(SMSBillable):
     @property
     def default_rate_item(self):
         return MachSMSRate.get_default(self.direction or OUTGOING, country="", network="")
+
+    @property
+    def throw_error_on_rateless(self):
+        """
+            If there is actually a delivered date, then throw an error here.
+        """
+        return self.mach_delivered_date is not None
 
     def save_message_info(self, message):
         self.sync_attempts.append(datetime.datetime.utcnow())
