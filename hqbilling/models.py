@@ -631,7 +631,7 @@ class SMSBillable(Document):
             self.billable_amount = 0
             self.has_error = True
             self.error_message = "Could not find rate item to match message or API response."
-            logging.error("[Billing] No SMS Rate Item Found for SMSLog # %s" % self.log_id)
+            logging.error("[Billing] No SMS Rate Item Found for SMSLog # %s | %s" % (self.log_id, self))
 
         if real_time or self.billable_date is None:
             self.billable_date = datetime.datetime.utcnow()
