@@ -23,9 +23,9 @@ from hqbilling.crud import (SMSRateCRUDManager, DimagiDomainSMSRateCRUDManager, 
                             TropoSMSRateCRUDManager, BillableCurrencyCRUDManager, TaxRateCRUDManager)
 from hqbilling.utils import get_mach_data, format_start_end_suffixes
 
-from corehq.apps.unicel.api import API_ID as UNICEL_API
-from corehq.apps.tropo.api import API_ID as TROPO_API
-from corehq.apps.sms.mach_api import API_ID as MACH_API
+from corehq.apps.unicel.api import UnicelBackend
+from corehq.apps.tropo.api import TropoBackend
+from corehq.apps.sms.mach_api import MachBackend
 
 DEFAULT_BASE = 0.02
 MACH_BASE_RATE = 0.005
@@ -919,7 +919,7 @@ class MachSMSBillable(SMSBillable):
 
 
 API_TO_BILLABLE = {
-    UNICEL_API: UnicelSMSBillable,
-    TROPO_API: TropoSMSBillable,
-    MACH_API: MachSMSBillable,
+    UnicelBackend.get_api_id(): UnicelSMSBillable,
+    TropoBackend.get_api_id(): TropoSMSBillable,
+    MachBackend.get_api_id(): MachSMSBillable,
 }
