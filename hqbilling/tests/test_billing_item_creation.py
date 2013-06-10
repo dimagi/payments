@@ -8,7 +8,7 @@ from corehq.apps.users.models import WebUser
 from corehq.apps.unicel.api import (UnicelBackend, InboundParams, DATE_FORMAT,
                                     create_from_request as unicel_incoming)
 from corehq.apps.tropo.api import TropoBackend
-from corehq.apps.sms.mach_api import MachBackend
+from corehq.apps.mach.api import MachBackend
 from corehq.apps.sms.api import incoming as create_incoming_msg
 
 from hqbilling.models import *

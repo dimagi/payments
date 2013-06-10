@@ -25,7 +25,7 @@ from hqbilling.utils import get_mach_data, format_start_end_suffixes
 
 from corehq.apps.unicel.api import UnicelBackend
 from corehq.apps.tropo.api import TropoBackend
-from corehq.apps.sms.mach_api import MachBackend
+from corehq.apps.mach.api import MachBackend
 
 DEFAULT_BASE = 0.02
 MACH_BASE_RATE = 0.005
