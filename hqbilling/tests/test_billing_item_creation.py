@@ -5,10 +5,10 @@ from corehq.apps.sms.models import SMSLog
 from corehq.apps.sms.util import clean_phone_number
 from corehq.apps.users.models import WebUser
 
-from corehq.apps.unicel.api import (send as unicel_send, InboundParams, DATE_FORMAT,
-                                    create_from_request as unicel_incoming, API_ID as UNICEL_API_ID)
-from corehq.apps.tropo.api import send as tropo_send, API_ID as TROPO_API_ID
-from corehq.apps.sms.mach_api import send as mach_send
+from corehq.apps.unicel.api import (UnicelBackend, InboundParams, DATE_FORMAT,
+                                    create_from_request as unicel_incoming)
+from corehq.apps.tropo.api import TropoBackend
+from corehq.apps.mach.api import MachBackend
 from corehq.apps.sms.api import incoming as create_incoming_msg
 
 from hqbilling.models import *
@@ -20,6 +20,22 @@ from hqbilling.tasks import bill_client_for_sms
 #    tropo="+somenumber",
 #    mach="'+somenumber"
 #)
+#
+# Also needed for the live tests are the following localsettings config items hooked
+# up to actual accounts:
+#
+#UNICEL_CONFIG = {
+#   "username" : "...",
+#   "password" : "...",
+#   "sender" : "...",
+#}
+#
+#TROPO_MESSAGING_TOKEN = "..."
+#
+#MACH_CONFIG = {
+#   "username" : "...",
+#   "password" : "...",
+#}
 
 class BillingItemTests(TestCase):
 
@@ -140,7 +156,7 @@ class BillingItemTests(TestCase):
         self.vn_unicel.owner_id = self.unicel_couch_user.get_id
         self.vn_unicel.owner_doc_type = self.unicel_couch_user.__class__.__name__
         self.vn_unicel.domain = self.domain
-        self.vn_unicel.backend_id = UNICEL_API_ID
+        self.vn_unicel.backend_id = None # This is not needed unless you use corehq.apps.sms.api.send_sms_to_verified_number
         self.vn_unicel.phone_number = strip_plus(clean_phone_number(self.unicel_couch_user.phone_number))
         self.vn_unicel.verified = True
         self.vn_unicel.save()
@@ -156,7 +172,7 @@ class BillingItemTests(TestCase):
         self.vn_tropo.owner_id = self.tropo_couch_user.get_id
         self.vn_tropo.owner_doc_type = self.tropo_couch_user.__class__.__name__
         self.vn_tropo.domain = self.domain
-        self.vn_tropo.backend_id = TROPO_API_ID
+        self.vn_tropo.backend_id = None # This is not needed unless you use corehq.apps.sms.api.send_sms_to_verified_number
         self.vn_tropo.phone_number = strip_plus(clean_phone_number(self.tropo_couch_user.phone_number))
         self.vn_tropo.verified = True
         self.vn_tropo.save()
@@ -170,8 +186,30 @@ class BillingItemTests(TestCase):
 
         try:
             self.tropo_token = getattr(settings, "TROPO_MESSAGING_TOKEN")
+            self.tropo_backend = TropoBackend(messaging_token=self.tropo_token)
         except AttributeError:
             self.tropo_token = None
+            self.tropo_backend = None
+
+        try:
+            unicel_config = getattr(settings, "UNICEL_CONFIG")
+            self.unicel_backend = UnicelBackend(
+                username=unicel_config["username"],
+                password=unicel_config["password"],
+                sender=unicel_config["sender"],
+            )
+        except AttributeError, KeyError:
+            self.unicel_backend = None
+
+        try:
+            mach_config = getattr(settings, "MACH_CONFIG")
+            self.mach_backend = MachBackend(
+                account_id=mach_config["username"],
+                password=mach_config["password"],
+                sender_id="TEST",
+            )
+        except AttributeError, KeyError:
+            self.mach_backend = None
 
     def tearDown(self):
         self.usd_rate.delete()
@@ -207,11 +245,11 @@ class BillingItemTests(TestCase):
             text = self.test_message)
         msg.save()
 
-        if self.sms_config and self.sms_config.get("unicel"):
+        if self.sms_config and self.sms_config.get("unicel") and self.unicel_backend:
             logging.info("\n\n[Billing - LIVE] UNICEL: Outgoing SMS Test.")
             msg.phone_number = self.sms_config.get("unicel")
             msg.save()
-            data = unicel_send(msg, delay=False)
+            data = self.unicel_backend.send(msg, delay=False)
         else:
             logging.info("\n\n[Billing] UNICEL: Outgoing SMS Test")
             data = "successful23541253235"
@@ -283,11 +321,11 @@ class BillingItemTests(TestCase):
             text = self.test_message)
         msg.save()
 
-        if self.sms_config and self.sms_config.get("tropo_us") and self.tropo_token:
+        if self.sms_config and self.sms_config.get("tropo_us") and self.tropo_backend:
             logging.info("\n\n[Billing - LIVE] Tropo: Outgoing US SMS Test")
             msg.phone_number = self.sms_config.get("tropo_us")
             msg.save()
-            data = tropo_send(msg, delay=False, **dict(messaging_token=self.tropo_token))
+            data = self.tropo_backend.send(msg, delay=False)
         else:
             logging.info("\n\n[Billing] Tropo: Outgoing US SMS Test")
             data = "<session><success>true</success><token>faketoken</token><id>aadfg3Aa321gdc8e628df2\n</id></session>"
@@ -324,11 +362,11 @@ class BillingItemTests(TestCase):
             text = self.test_message)
         msg.save()
 
-        if self.sms_config and self.sms_config.get("tropo_int") and self.tropo_token:
+        if self.sms_config and self.sms_config.get("tropo_int") and self.tropo_backend:
             logging.info("\n\n[Billing - LIVE] Tropo:  Outgoing International SMS Test")
             msg.phone_number = self.sms_config.get("tropo_int")
             msg.save()
-            data = tropo_send(msg, delay=False, **dict(messaging_token=self.tropo_token))
+            data = self.tropo_backend.send(msg, delay=False)
         else:
             logging.info("\n\n[Billing] Tropo: Outgoing International SMS Test")
             data = "<session><success>true</success><token>faketoken</token><id>aadfg3Aa321gdc8e628df2\n</id></session>"
@@ -376,7 +414,7 @@ class BillingItemTests(TestCase):
         # req = FakeRequest()
         # req.params = fake_post
 
-        log = create_incoming_msg(str(self.tropo_couch_user.phone_number), self.test_message, TROPO_API_ID, delay=False)
+        log = create_incoming_msg(str(self.tropo_couch_user.phone_number), self.test_message, TropoBackend.get_api_id(), delay=False)
 
         billable_items = TropoSMSBillable.by_domain_and_direction(self.domain, INCOMING)
 
@@ -404,11 +442,11 @@ class BillingItemTests(TestCase):
             text = self.test_message)
         msg.save()
 
-        if self.sms_config and self.sms_config.get("mach"):
+        if self.sms_config and self.sms_config.get("mach") and self.mach_backend:
             logging.info("\n\n[Billing - LIVE] MACH: Outgoing SMS test")
             msg.phone_number = self.sms_config.get("mach")
             msg.save()
-            data = mach_send(msg, delay=False)
+            data = self.mach_backend.send(msg, delay=False)
         else:
             logging.info("\n\n[Billing] MACH: Outgoing SMS test")
             msg.phone_number = self.mach_number.phone_number
