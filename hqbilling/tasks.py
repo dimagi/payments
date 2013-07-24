@@ -23,7 +23,7 @@ class first_of_month(schedule):
     def __repr__(self):
         return "<first of month>"
 
-@periodic_task(run_every=crontab(minute=0, hour='*/6'), queue=settings.CELERY_PERIODIC_QUEUE)
+@periodic_task(run_every=crontab(minute=0, hour='*/6'), queue=getattr(settings, 'CELERY_PERIODIC_QUEUE','celery'))
 def update_currency_conversion():
     rate_classes = [MachSMSRate, TropoSMSRate, UnicelSMSRate]
     rate_codes = [klass._admin_crud_class.currency_code for klass in rate_classes]
@@ -51,7 +51,7 @@ def bill_client_for_sms(klass, message_id, **kwargs):
     except Exception as e:
         logging.exception("Failed create billable item from message %s.\n ERROR: %s" % (message, e))
 
-@periodic_task(run_every=crontab(minute=0, hour='*/12'), queue=settings.CELERY_PERIODIC_QUEUE)
+@periodic_task(run_every=crontab(minute=0, hour='*/12'), queue=getattr(settings, 'CELERY_PERIODIC_QUEUE','celery'))
 def update_mach_billables():
     mach_data = get_mach_data(days=3)
     try:
@@ -90,7 +90,7 @@ def update_mach_billables():
         logging.error("There was an error updating mach billables: %s" % e)
 
 
-@periodic_task(run_every=first_of_month(), queue=settings.CELERY_PERIODIC_QUEUE)
+@periodic_task(run_every=first_of_month(), queue=getattr(settings, 'CELERY_PERIODIC_QUEUE','celery'))
 def generate_monthly_bills(billing_range=None, domain_name=None):
     logging.info("[Billing] Generating Monthly Bills")
     from corehq.apps.domain.models import Domain
