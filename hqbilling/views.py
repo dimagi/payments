@@ -12,7 +12,7 @@ from django.shortcuts import render
 
 from corehq.apps.domain.decorators import require_superuser
 from corehq.apps.domain.models import Domain
-from corehq.apps.domain.views import BaseProjectInfoView
+from corehq.apps.domain.views import BaseEditProjectInfoView
 
 from hqbilling.forms import *
 from hqbilling.models import *
@@ -130,7 +130,7 @@ def update_client_info(request, domain):
     }))
 
 
-class EditProjectBillingInfoView(BaseProjectInfoView):
+class EditProjectBillingInfoView(BaseEditProjectInfoView):
     template_name = 'hqbilling/domain/forms/billing_info.html'
     name = 'domain_billing_info'
     page_title = ugettext_noop("Billing")
