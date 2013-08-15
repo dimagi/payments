@@ -198,7 +198,7 @@ class BillingItemTests(TestCase):
                 password=unicel_config["password"],
                 sender=unicel_config["sender"],
             )
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             self.unicel_backend = None
 
         try:
@@ -208,7 +208,7 @@ class BillingItemTests(TestCase):
                 password=mach_config["password"],
                 sender_id="TEST",
             )
-        except AttributeError, KeyError:
+        except (AttributeError, KeyError):
             self.mach_backend = None
 
     def tearDown(self):
