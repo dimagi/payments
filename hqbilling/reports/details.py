@@ -50,7 +50,7 @@ class BillingDetailReport(GenericTabularReport, HQBillingReport, DatespanMixin):
 class SMSDetailReport(BillingDetailReport):
     name = "Messaging Details"
     slug = "sms_detail"
-    fields = ['corehq.apps.reports.fields.DatespanField',
+    fields = ['corehq.apps.reports.filters.dates.DatespanFilter',
               'hqbilling.filters.SelectActivelyBillableDomainsFilter',
               'hqbilling.filters.SelectSMSBillableDomainsFilter',
               'hqbilling.filters.SelectSMSDirectionFilter']
@@ -122,7 +122,7 @@ class SMSDetailReport(BillingDetailReport):
 class MonthlyBillReport(BillingDetailReport):
     name = "Monthly Bill by Domain"
     slug = "monthly_bill"
-    fields = ['corehq.apps.reports.fields.DatespanField',
+    fields = ['corehq.apps.reports.filters.dates.DatespanFilter',
               'hqbilling.filters.SelectActivelyBillableDomainsFilter',
               'hqbilling.filters.SelectSMSBillableDomainsFilter']
     report_template_path = "hqbilling/reports/monthly_bill_summary_report.html"
