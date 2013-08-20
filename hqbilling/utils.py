@@ -22,7 +22,7 @@ def get_mach_data(days=1):
     cj = cookielib.CookieJar()
     opener.add_handler(urllib2.HTTPCookieProcessor(cj))
     datagen, headers = poster.encode.multipart_encode(mach_login)
-    login_request = urllib2.Request("https://connectivity.mach.com/customer/index.php", datagen, headers)
+    login_request = urllib2.Request("https://a2p.syniverse.com/customer/index.php", datagen, headers)
     urllib2.urlopen(login_request) #login and grab the cookies
     mach_post = dict(
         dnr="",
@@ -39,7 +39,7 @@ def get_mach_data(days=1):
         csvdownload="on"
     )
     datagen, headers = poster.encode.multipart_encode(mach_post)
-    request = urllib2.Request("https://connectivity.mach.com/customer/messagetracking.php", datagen, headers)
+    request = urllib2.Request("https://a2p.syniverse.com/customer/messagetracking.php", datagen, headers)
     resp = urllib2.urlopen(request)
     data = resp.read()
     mach_data = re.split(',|\n',data)
