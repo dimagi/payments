@@ -132,7 +132,7 @@ def update_client_info(request, domain):
 
 class EditProjectBillingInfoView(BaseEditProjectInfoView):
     template_name = 'hqbilling/domain/forms/billing_info.html'
-    name = 'domain_billing_info'
+    urlname = 'domain_billing_info'
     page_title = ugettext_noop("Billing")
 
     @property
