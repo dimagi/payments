@@ -1,9 +1,18 @@
-{% load hqstyle_tags %}
-<form class="form form-horizontal" action="" method="post">
-    <input type="hidden" name="billing_info_form" value="true" />
-    {% bootstrap_form_errors billing_info_form %}
-    {% bootstrap_fieldset billing_info_form "Billing Address" %}
-    <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Update Billing Information</button>
-    </div>
-</form>
+{% extends "domain/admin/info_base.html" %}
+{% load hq_shared_tags %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block main_column %}
+    <form class="form-horizontal" method="post">
+        <fieldset>
+            <legend>{% trans 'Edit Billing Information' %}</legend>
+            {% crispy billing_info_form %}
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    {% trans 'Update Billing Info' %}
+                </button>
+            </div>
+        </fieldset>
+    </form>
+{% endblock %}

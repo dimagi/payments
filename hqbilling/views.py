@@ -1,5 +1,7 @@
 import dateutil
+from django.contrib import messages
 from django.template import RequestContext
+from django.utils.translation import ugettext as _, ugettext_noop
 from tastypie.http import HttpBadRequest
 from corehq.apps.crud.views import BaseAdminCRUDFormView
 from django.core.urlresolvers import reverse
@@ -10,6 +12,7 @@ from django.shortcuts import render
 
 from corehq.apps.domain.decorators import require_superuser
 from corehq.apps.domain.models import Domain
+from corehq.apps.domain.views import BaseEditProjectInfoView
 
 from hqbilling.forms import *
 from hqbilling.models import *
@@ -125,6 +128,38 @@ def update_client_info(request, domain):
         'domain': domain.name,
         'button': button_response,
     }))
+
+
+class EditProjectBillingInfoView(BaseEditProjectInfoView):
+    template_name = 'hqbilling/domain/forms/billing_info.html'
+    urlname = 'domain_billing_info'
+    page_title = ugettext_noop("Billing")
+
+    @property
+    @memoized
+    def billing_info_form(self):
+        if self.request.method == 'POST':
+            return DomainBillingInfoForm(self.request.POST)
+        initial = {
+            'phone_number': self.domain_object.billing_number,
+            'currency_code': self.domain_object.currency_code,
+        }
+        initial.update(self.domain_object.billing_address.to_json())
+        return DomainBillingInfoForm(initial=initial)
+
+    @property
+    def page_context(self):
+        return {
+            'billing_info_form': self.billing_info_form,
+        }
+
+    def post(self, request, *args, **kwargs):
+        if self.billing_info_form.is_valid():
+            self.billing_info_form.save(self.domain_object)
+            messages.success(request, _("The billing information for project %s was successfully updated!")
+                                      % self.domain_object.name)
+        return self.get(request, *args, **kwargs)
+
 
 #
 #def deltestdata(request):
