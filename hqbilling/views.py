@@ -144,7 +144,7 @@ class EditProjectBillingInfoView(BaseEditProjectInfoView):
             'phone_number': self.domain_object.billing_number,
             'currency_code': self.domain_object.currency_code,
         }
-        initial.update(self.domain_object.billing_address._doc)
+        initial.update(self.domain_object.billing_address.to_json())
         return DomainBillingInfoForm(initial=initial)
 
     @property
