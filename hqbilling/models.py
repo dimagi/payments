@@ -885,6 +885,13 @@ class MachSMSBillable(SMSBillable):
     def handle_api_response(cls, message, **kwargs):
         response = kwargs.get('response', None)
         logging.info("[Billing] Mach API Response %s" % response)
+        # temporary measure, charge all messages
+        rate_item = MachSMSRate.get_default(direction=OUTGOING, country="USA", network="dimagi")
+        billable = cls.new_billable(rate_item, message)
+        if billable:
+            billable.contacted_mach_api = datetime.datetime.now(tz=pytz.utc)
+            billable.save()
+            return
         if isinstance(response, str) or isinstance(response, unicode):
             api_success = bool("+OK" in response)
             if api_success:
