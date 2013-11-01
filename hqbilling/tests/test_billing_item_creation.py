@@ -124,26 +124,26 @@ class BillingItemTests(TestCase):
         self.tropo_rate_incoming.save()
 
 
-        self.mach_rate = MachSMSRate()
-        self.mach_rate.direction = OUTGOING
-        self.mach_rate.base_fee = 0.005
-        self.mach_rate.network_surcharge = 0.0075
-        self.mach_rate.currency_code = self.mach_rate._admin_crud_class.currency_code
-        self.mach_rate.last_modified = datetime.datetime.utcnow()
-        self.mach_rate.country_code = "49"
-        self.mach_rate.mcc = "262"
-        self.mach_rate.mnc = "07"
-        self.mach_rate.network = "O2"
-        self.mach_rate.iso = "de"
-        self.mach_rate.country = "Germany"
-        self.mach_rate.save()
-
-
-        self.mach_number = MachPhoneNumber()
-        self.mach_number.phone_number = "+4917685675599"
-        self.mach_number.country = self.mach_rate.country
-        self.mach_number.network = self.mach_rate.network
-        self.mach_number.save()
+        # self.mach_rate = MachSMSRate()
+        # self.mach_rate.direction = OUTGOING
+        # self.mach_rate.base_fee = 0.005
+        # self.mach_rate.network_surcharge = 0.0075
+        # self.mach_rate.currency_code = self.mach_rate._admin_crud_class.currency_code
+        # self.mach_rate.last_modified = datetime.datetime.utcnow()
+        # self.mach_rate.country_code = "49"
+        # self.mach_rate.mcc = "262"
+        # self.mach_rate.mnc = "07"
+        # self.mach_rate.network = "O2"
+        # self.mach_rate.iso = "de"
+        # self.mach_rate.country = "Germany"
+        # self.mach_rate.save()
+        #
+        #
+        # self.mach_number = MachPhoneNumber()
+        # self.mach_number.phone_number = "+4917685675599"
+        # self.mach_number.country = self.mach_rate.country
+        # self.mach_number.network = self.mach_rate.network
+        # self.mach_number.save()
 
 
         # FOR INCOMING UNICEL
@@ -201,15 +201,15 @@ class BillingItemTests(TestCase):
         except (AttributeError, KeyError):
             self.unicel_backend = None
 
-        try:
-            mach_config = getattr(settings, "MACH_CONFIG")
-            self.mach_backend = MachBackend(
-                account_id=mach_config["username"],
-                password=mach_config["password"],
-                sender_id="TEST",
-            )
-        except (AttributeError, KeyError):
-            self.mach_backend = None
+        # try:
+        #     mach_config = getattr(settings, "MACH_CONFIG")
+        #     self.mach_backend = MachBackend(
+        #         account_id=mach_config["username"],
+        #         password=mach_config["password"],
+        #         sender_id="TEST",
+        #     )
+        # except (AttributeError, KeyError):
+        #     self.mach_backend = None
 
     def tearDown(self):
         self.usd_rate.delete()
@@ -225,9 +225,9 @@ class BillingItemTests(TestCase):
         self.tropo_rate_us.delete()
         self.tropo_rate_incoming.delete()
 
-        self.mach_rate.delete()
-
-        self.mach_number.delete()
+        # self.mach_rate.delete()
+        #
+        # self.mach_number.delete()
 
         self.unicel_couch_user.delete()
         self.vn_unicel.delete()
@@ -433,47 +433,47 @@ class BillingItemTests(TestCase):
             raise Exception("There were unknown errors creating an incoming Tropo billing rate!")
 
 
-    def testOutgoingMachApi(self):
-        self.assertEqual(self.mach_rate.conversion_rate, self.eur_rate.conversion)
-        msg = SMSLog(
-            domain = self.domain,
-            direction = OUTGOING,
-            date = datetime.datetime.utcnow(),
-            text = self.test_message)
-        msg.save()
-
-        if self.sms_config and self.sms_config.get("mach") and self.mach_backend:
-            logging.info("\n\n[Billing - LIVE] MACH: Outgoing SMS test")
-            msg.phone_number = self.sms_config.get("mach")
-            msg.save()
-            data = self.mach_backend.send(msg, delay=False)
-        else:
-            logging.info("\n\n[Billing] MACH: Outgoing SMS test")
-            msg.phone_number = self.mach_number.phone_number
-            msg.save()
-            data = "MACH RESPONSE +OK 01 message queued (dest=%s)" % msg.phone_number
-            bill_client_for_sms(MachSMSBillable, msg.get_id, **dict(response=data,
-                _test_scrape=[['43535235Test', 'test', 'TEST', self.mach_number.phone_number,
-                               '09.08. 15:44:12', '09.08. 15:44:20', 'Germany O2 ',
-                               'delivered']]))
-
-        logging.info("Response from MACH: %s" % data)
-
-        billable_items = MachSMSBillable.by_domain(self.domain)
-        if billable_items:
-            billable_item = billable_items[0]
-            self.assertEqual(self.mach_rate.base_fee + self.mach_rate.network_surcharge,
-                billable_item.billable_amount)
-            self.assertEqual(self.mach_rate._id, billable_item.rate_id)
-            self.assertEqual(msg._id, billable_item.log_id)
-            self.assertEqual(self.mach_rate.conversion_rate, billable_item.conversion_rate)
-            self.assertEqual(self.dimagi_surcharge.base_fee, billable_item.dimagi_surcharge)
-            billable_item.delete()
-            if billable_item.has_error:
-                raise Exception("There were recorded errors creating an outgoing MACH billing rate: %s" %
-                                billable_item.error_message)
-        else:
-            raise Exception("There were unknown errors creating an outgoing MACH billing rate!")
+    # def testOutgoingMachApi(self):
+    #     self.assertEqual(self.mach_rate.conversion_rate, self.eur_rate.conversion)
+    #     msg = SMSLog(
+    #         domain = self.domain,
+    #         direction = OUTGOING,
+    #         date = datetime.datetime.utcnow(),
+    #         text = self.test_message)
+    #     msg.save()
+    #
+    #     if self.sms_config and self.sms_config.get("mach") and self.mach_backend:
+    #         logging.info("\n\n[Billing - LIVE] MACH: Outgoing SMS test")
+    #         msg.phone_number = self.sms_config.get("mach")
+    #         msg.save()
+    #         data = self.mach_backend.send(msg, delay=False)
+    #     else:
+    #         logging.info("\n\n[Billing] MACH: Outgoing SMS test")
+    #         msg.phone_number = self.mach_number.phone_number
+    #         msg.save()
+    #         data = "MACH RESPONSE +OK 01 message queued (dest=%s)" % msg.phone_number
+    #         bill_client_for_sms(MachSMSBillable, msg.get_id, **dict(response=data,
+    #             _test_scrape=[['43535235Test', 'test', 'TEST', self.mach_number.phone_number,
+    #                            '09.08. 15:44:12', '09.08. 15:44:20', 'Germany O2 ',
+    #                            'delivered']]))
+    #
+    #     logging.info("Response from MACH: %s" % data)
+    #
+    #     billable_items = MachSMSBillable.by_domain(self.domain)
+    #     if billable_items:
+    #         billable_item = billable_items[0]
+    #         self.assertEqual(self.mach_rate.base_fee + self.mach_rate.network_surcharge,
+    #             billable_item.billable_amount)
+    #         self.assertEqual(self.mach_rate._id, billable_item.rate_id)
+    #         self.assertEqual(msg._id, billable_item.log_id)
+    #         self.assertEqual(self.mach_rate.conversion_rate, billable_item.conversion_rate)
+    #         self.assertEqual(self.dimagi_surcharge.base_fee, billable_item.dimagi_surcharge)
+    #         billable_item.delete()
+    #         if billable_item.has_error:
+    #             raise Exception("There were recorded errors creating an outgoing MACH billing rate: %s" %
+    #                             billable_item.error_message)
+    #     else:
+    #         raise Exception("There were unknown errors creating an outgoing MACH billing rate!")
 
 
 
