@@ -899,7 +899,9 @@ class MachSMSBillable(SMSBillable):
             billable.mach_delivery_status = "delivered"
             billable.mach_delivered_date = now
             from corehq.apps.sms.models import SMSLog
-            SMSLog.get(message._id).billed = True
+            msg = SMSLog.get(message._id)  # no doc conflicts
+            msg.billed = True
+            msg.save()
             # make sure the billable_date is the same date the message was generated for retro billing issues.
             billable.billable_date = message.date
             billable.save()
