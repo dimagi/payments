@@ -627,6 +627,10 @@ class SMSBillable(Document):
         if rate_item:
             self.billable_amount = rate_item.billable_amount
             self.conversion_rate = rate_item.conversion_rate
+            if self.conversion_rate == 0:
+                # TEMPORARY FIX
+                # for EUR conversion so that pathfinder can get billed immediately
+                self.conversion_rate = 1.38
             self.rate_id = rate_item._id
             logging.info("[Billing] Successfully Applied SMS Rate: %s" % rate_item)
         else:
