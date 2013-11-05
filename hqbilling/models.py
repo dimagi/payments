@@ -893,7 +893,17 @@ class MachSMSBillable(SMSBillable):
         rate_item = MachSMSRate.get_default(direction=OUTGOING, country="USA", network="dimagi")
         billable = cls.new_billable(rate_item, message)
         if billable:
-            billable.contacted_mach_api = datetime.datetime.now(tz=pytz.utc)
+            now = datetime.datetime.now(tz=pytz.utc)
+            billable.contacted_mach_api = now
+            billable.mach_id = "dimagi-retro"
+            billable.mach_delivery_status = "delivered"
+            billable.mach_delivered_date = now
+            from corehq.apps.sms.models import SMSLog
+            msg = SMSLog.get(message._id)  # no doc conflicts
+            msg.billed = True
+            msg.save()
+            # make sure the billable_date is the same date the message was generated for retro billing issues.
+            billable.billable_date = message.date
             billable.save()
             return
         if isinstance(response, str) or isinstance(response, unicode):
