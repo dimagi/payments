@@ -53,6 +53,10 @@ def bill_client_for_sms(klass, message_id, **kwargs):
 
 @periodic_task(run_every=crontab(minute=0, hour='*/12'), queue=getattr(settings, 'CELERY_PERIODIC_QUEUE','celery'))
 def update_mach_billables():
+    """
+    Goes through all billable items tied to mach (SMS records) and tries
+    to make sure that they are properly associated with rates from mach.
+    """
     mach_data = get_mach_data(days=3)
     try:
         # rateless billables are Mach Billables that do not have a delivered date
