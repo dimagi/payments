@@ -75,17 +75,6 @@ def update_mach_billables():
                         break
             deal_with_delinquent_mach_billable(billable)
 
-        # statusless billables are Mach Billables that were not confirmed as deivered
-        statusless_billables = MachSMSBillable.get_statusless()
-        for billable in statusless_billables:
-            billable.sync_attempts.append(datetime.datetime.utcnow())
-            for data in mach_data:
-                billable.update_mach_delivery_status(data)
-                billable.save()
-                if billable.mach_delivered_date:
-                    break
-            deal_with_delinquent_mach_billable(billable)
-
     except Exception as e:
         logging.error("There was an error updating mach billables: %s" % e)
 

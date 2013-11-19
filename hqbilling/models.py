@@ -878,16 +878,6 @@ class MachSMSBillable(SMSBillable):
             yield cls.wrap(doc)
 
     @classmethod
-    def get_statusless(cls):
-        ids = [r['id'] for r in cls.view(cls._mach_couchview,
-            reduce=False,
-            startkey=["statusless"],
-            endkey=["statusless", {}],
-        )]
-        for doc in iter_docs(cls.get_db(), ids):
-            yield cls.wrap(doc)
-
-    @classmethod
     def handle_api_response(cls, message, **kwargs):
         response = kwargs.get('response', None)
         logging.info("[Billing] Mach API Response %s" % response)
