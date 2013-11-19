@@ -56,7 +56,7 @@ def update_mach_billables():
     mach_data = get_mach_data(days=3)
     try:
         # rateless billables are Mach Billables that do not have a delivered date
-        rateless_billables = MachSMSBillable.get_rateless().all()
+        rateless_billables = MachSMSBillable.get_rateless()
         for billable in rateless_billables:
             billable.sync_attempts.append(datetime.datetime.utcnow())
             for data in mach_data:
@@ -76,7 +76,7 @@ def update_mach_billables():
             deal_with_delinquent_mach_billable(billable)
 
         # statusless billables are Mach Billables that were not confirmed as deivered
-        statusless_billables = MachSMSBillable.get_statusless().all()
+        statusless_billables = MachSMSBillable.get_statusless()
         for billable in statusless_billables:
             billable.sync_attempts.append(datetime.datetime.utcnow())
             for data in mach_data:

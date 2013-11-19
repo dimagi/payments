@@ -14,7 +14,7 @@ import pytz
 from corehq.apps.crud.models import AdminCRUDDocumentMixin
 from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.users.models import CommCareUser
-from dimagi.utils.couch.database import get_db
+from dimagi.utils.couch.database import get_db, iter_docs
 from dimagi.utils.dates import add_months
 from dimagi.utils.decorators.memoized import memoized
 from dimagi.utils.modules import to_function
@@ -842,7 +842,7 @@ class MachSMSBillable(SMSBillable):
                 is_dst = tz_utils.is_timezone_in_dst(berlin, delivered_on)
                 delivered_on = berlin.localize(delivered_on, is_dst=is_dst).astimezone(pytz.utc)
                 contact = datetime.datetime.replace(self.contacted_mach_api, tzinfo=pytz.utc)
-                td = contact-delivered_on
+                td = contact - delivered_on
                 total_seconds = abs(td.seconds + td.days * 24 * 3600)
                 existing = self.get_by_mach_id(mach_id)
                 # allowing three minutes of latency and making sure that the mach_id is unique
@@ -868,22 +868,24 @@ class MachSMSBillable(SMSBillable):
         )
 
     @classmethod
-    def get_rateless(cls, include_docs=True):
-        return cls.view(cls._mach_couchview,
+    def get_rateless(cls):
+        ids = [r['id'] for r in cls.view(cls._mach_couchview,
             reduce=False,
-            include_docs=include_docs,
             startkey=["rateless"],
-            endkey=["rateless", {}]
-        )
+            endkey=["rateless", {}],
+        )]
+        for doc in iter_docs(cls.get_db(), ids):
+            yield cls.wrap(doc)
 
     @classmethod
-    def get_statusless(cls, include_docs=True):
-        return cls.view(cls._mach_couchview,
+    def get_statusless(cls):
+        ids = [r['id'] for r in cls.view(cls._mach_couchview,
             reduce=False,
-            include_docs=include_docs,
             startkey=["statusless"],
-            endkey=["statusless", {}]
-        )
+            endkey=["statusless", {}],
+        )]
+        for doc in iter_docs(cls.get_db(), ids):
+            yield cls.wrap(doc)
 
     @classmethod
     def handle_api_response(cls, message, **kwargs):
