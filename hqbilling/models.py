@@ -842,7 +842,7 @@ class MachSMSBillable(SMSBillable):
                 is_dst = tz_utils.is_timezone_in_dst(berlin, delivered_on)
                 delivered_on = berlin.localize(delivered_on, is_dst=is_dst).astimezone(pytz.utc)
                 contact = datetime.datetime.replace(self.contacted_mach_api, tzinfo=pytz.utc)
-                td = contact-delivered_on
+                td = contact - delivered_on
                 total_seconds = abs(td.seconds + td.days * 24 * 3600)
                 existing = self.get_by_mach_id(mach_id)
                 # allowing three minutes of latency and making sure that the mach_id is unique
