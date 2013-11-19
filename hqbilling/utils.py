@@ -67,7 +67,8 @@ def deal_with_delinquent_mach_billable(billable):
         billable.billable_date = billable.billable_date or now
         billable.modified_date = billable.modified_date or now
         billable.mach_delivered_date = billable.mach_delivered_date or now
-
+        from hqbilling.models import UNKNOWN_RATE_ID
+        billable.rate_id = billable.rate_id or UNKNOWN_RATE_ID
         if billable.mach_delivery_status != "accepted":
             # generally the status will say something other than accepted after a while once it's actually accepted,
             # however, sometimes it just stays at this. If it has any other delivery status at this point, mark it as
@@ -75,9 +76,6 @@ def deal_with_delinquent_mach_billable(billable):
             billable.billable_amount = 0
             billable.conversion_rate = 1
             billable.dimagi_surcharge = billable.dimagi_surcharge or 0
-            from hqbilling.models import UNKNOWN_RATE_ID
-            billable.rate_id = billable.rate_id or UNKNOWN_RATE_ID
-
             billable.has_error = True
             if not billable.error_message:
                 billable.error_message = "Mach failed to send message due to '%s'" % billable.mach_delivery_status
