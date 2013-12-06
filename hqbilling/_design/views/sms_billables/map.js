@@ -6,7 +6,7 @@ function (doc) {
 
         emit(["domain", doc.domain, doc.billable_date], 1);
         emit(["type domain", doc.doc_type, doc.domain, doc.billable_date], 1);
-        emit(["domain log_id", doc.domain, doc.log_id, doc.billable_date, doc.modified_date], 1);
+        emit(["domain log_id", doc.domain, doc.log_id, doc.modified_date], 1);
 
         emit(["domain direction", doc.domain, doc.direction, doc.billable_date], 1);
         emit(["type domain direction", doc.doc_type, doc.domain, doc.direction, doc.billable_date], 1);
