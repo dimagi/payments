@@ -5,9 +5,7 @@ from hqbilling.models import MachSMSBillable
 
 
 class Command(NoArgsCommand):
-    help = "Recalculate sms billed for bills generated in a particular month."
-    args = "<year, ex: 2012> <month integer: 1-12> <optional: domain>"
-    label = ""
+    help = "Fixes MACH Billable billable_date from Aug 1st to Nov 30, 2011"
 
     def handle_noargs(self, *args, **options):
         mach_billables = MachSMSBillable.get_db().view(
