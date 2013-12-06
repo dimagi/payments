@@ -8,7 +8,7 @@ from corehq.apps.reports.generic import GenericTabularReport
 from dimagi.utils.dates import DateSpan
 from dimagi.utils.decorators.memoized import memoized
 from hqbilling.filters import (SelectSMSBillableDomainsFilter, SelectSMSDirectionFilter,
-                               SelectActivelyBillableDomainsFilter)
+                               SelectActivelyBillableDomainsFilter, SelectBillableDuplicateFilter)
 from hqbilling.models import HQMonthlyBill, SMS_DIRECTIONS, SMSBillable
 from hqbilling.reports import HQBillingReport
 
@@ -53,7 +53,8 @@ class SMSDetailReport(BillingDetailReport):
     fields = ['corehq.apps.reports.filters.dates.DatespanFilter',
               'hqbilling.filters.SelectActivelyBillableDomainsFilter',
               'hqbilling.filters.SelectSMSBillableDomainsFilter',
-              'hqbilling.filters.SelectSMSDirectionFilter']
+              'hqbilling.filters.SelectSMSDirectionFilter',
+              'hqbilling.filters.SelectBillableDuplicateFilter']
     exportable = True
 
     domain_filter_class = SelectSMSBillableDomainsFilter
@@ -68,8 +69,10 @@ class SMSDetailReport(BillingDetailReport):
     @property
     def headers(self):
         return DataTablesHeader(
-            DataTablesColumn("Date", sort_type=DTSortType.DATE),
+            DataTablesColumn("Date"),
+            DataTablesColumn("Date Modified"),
             DataTablesColumn("Client"),
+            DataTablesColumn("Messsage Log ID"),
             DataTablesColumn("Domain"),
             DataTablesColumn("Direction"),
             DataTablesColumn("Backend API"),
@@ -85,6 +88,8 @@ class SMSDetailReport(BillingDetailReport):
     def rows(self):
         rows = []
         totals = [0,0,0]
+
+        show_dupes = self.request.GET.get(SelectBillableDuplicateFilter.slug) == 'all'
         for domain in self.domains:
             if self.direction:
                 billables = SMSBillable.by_domain_and_direction(domain.name, self.direction,
@@ -92,15 +97,26 @@ class SMSDetailReport(BillingDetailReport):
             else:
                 billables = SMSBillable.by_domain(domain.name,
                     start=self.datespan.startdate_param_utc, end=self.datespan.enddate_param_utc)
-
+            # yes, I know I'm lazy...but this view is going away soon anyway
+            billables.reverse()
+            last_billable = None
             for billable in billables:
+                if last_billable and last_billable.log_id == billable.log_id and not show_dupes:
+                    continue
                 totals[0] += billable.converted_billable_amount
                 totals[1] += billable.dimagi_surcharge
                 totals[2] += billable.total_billed
-                rows.append([
-                    self.table_cell(billable.billable_date.isoformat(),
-                        billable.billable_date.strftime("%B %d, %Y %H:%M:%S")),
+                row = [
+                    self.table_cell(
+                        billable.billable_date.isoformat(),
+                        billable.billable_date.strftime("%Y-%m-%d %H:%M:%S")
+                    ),
+                    self.table_cell(
+                        billable.modified_date.isoformat(),
+                        billable.modified_date.strftime("%Y-%m-%d %H:%M:%S")
+                    ),
                     self._format_client(domain),
+                    billable.log_id,
                     domain.name,
                     SMS_DIRECTIONS.get(billable.direction),
                     billable.api_name(),
@@ -114,8 +130,10 @@ class SMSDetailReport(BillingDetailReport):
                     self._format_bill_amount(billable.converted_billable_amount),
                     self._format_bill_amount(billable.dimagi_surcharge),
                     self._format_bill_amount(billable.total_billed)
-                ])
-        self.total_row = ["", "", "", "", "", "Total Billed:"] + ["%.2f" % t for t in totals]
+                ]
+                rows.append(row)
+                last_billable = billable
+        self.total_row = ["", "", "", "", "", "", "", "Total Billed:"] + ["%.2f" % t for t in totals]
         return rows
 
 
