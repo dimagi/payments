@@ -260,16 +260,13 @@ class HQMonthlyBill(Document):
         all_billables = SMSBillable.by_domain_and_direction(self.domain,
             direction, start=self.billing_period_start.isoformat(),
             end=self.billing_period_end.isoformat())
-        all_billables.reverse()
-        last_billable = None
-        all_unique_billables = []
+        latest_billable_by_message_id = {}
         for billable in all_billables:
-            if last_billable and last_billable.log_id == billable.log_id:
-                continue
-            all_unique_billables.append(billable)
-            last_billable = billable
-        cost = sum([b.total_billed for b in all_unique_billables])
-        all_ids = [b._id for b in all_unique_billables]
+            if (billable.log_id not in latest_billable_by_message_id
+                or latest_billable_by_message_id[billable.log_id].modified_date < billable.modified_date):
+                latest_billable_by_message_id[billable.log_id] = billable
+        cost = sum([b.total_billed for b in latest_billable_by_message_id.values()])
+        all_ids = [b._id for b in latest_billable_by_message_id.values()]
         setattr(self, '%s_sms_billables' % direction_name, all_ids)
         setattr(self, '%s_sms_billed' % direction_name, cost)
 
