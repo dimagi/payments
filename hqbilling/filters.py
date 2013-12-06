@@ -75,3 +75,12 @@ class SelectActivelyBillableDomainsFilter(BaseSingleOptionFilter):
     @property
     def options(self):
         return [('yes', 'Show Actively Billable Only')]
+
+
+class SelectBillableDuplicateFilter(BaseSingleOptionFilter):
+    slug = "dupes"
+    label = "Handle Duplicates"
+    default_text = "Show Most Recent"
+    options = [
+        ('all', "Show All")
+    ]

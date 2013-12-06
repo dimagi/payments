@@ -260,8 +260,16 @@ class HQMonthlyBill(Document):
         all_billables = SMSBillable.by_domain_and_direction(self.domain,
             direction, start=self.billing_period_start.isoformat(),
             end=self.billing_period_end.isoformat())
-        all_ids = [b.get_id for b in all_billables]
-        cost = sum([b.total_billed for b in all_billables])
+        all_billables.reverse()
+        last_billable = None
+        all_unique_billables = []
+        for billable in all_billables:
+            if last_billable and last_billable.log_id == billable.log_id:
+                continue
+            all_unique_billables.append(billable)
+            last_billable = billable
+        cost = sum([b.total_billed for b in all_unique_billables])
+        all_ids = [b._id for b in all_unique_billables]
         setattr(self, '%s_sms_billables' % direction_name, all_ids)
         setattr(self, '%s_sms_billed' % direction_name, cost)
 
@@ -642,9 +650,6 @@ class SMSBillable(Document):
                 self.error_message = "Could not find rate item to match message or API response."
                 logging.error("[Billing] No SMS Rate Item Found for SMSLog # %s | %s | %s" %
                               (self.log_id, self._id, self))
-
-        if real_time or self.billable_date is None:
-            self.billable_date = datetime.datetime.utcnow()
         self.modified_date = datetime.datetime.utcnow()
 
     def save_message_info(self, message):
@@ -695,7 +700,7 @@ class SMSBillable(Document):
         return data
 
     @classmethod
-    def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None):
+    def by_domain_and_direction(cls, domain, direction, include_docs=True, start=None, end=None, reverse=False):
         data = []
         for c in cls._get_relevant_classes():
             key = ["type domain direction", c.__name__, domain, direction]
@@ -714,6 +719,7 @@ class SMSBillable(Document):
         billable.save_message_info(message)
         billable.calculate_surcharge(message)
         billable.calculate_rate(rate_item)
+        billable.billable_date = message.date
         billable.save()
         return billable
 
@@ -890,13 +896,6 @@ class MachSMSBillable(SMSBillable):
             billable.mach_id = "dimagi-retro"
             billable.mach_delivery_status = "delivered"
             billable.mach_delivered_date = now
-            from corehq.apps.sms.models import SMSLog
-            msg = SMSLog.get(message._id)  # no doc conflicts
-            msg.billed = True
-            msg.save()
-            # make sure the billable_date is the same date the message was generated for retro billing issues.
-            billable.billable_date = message.date
-            billable.save()
             return
         if isinstance(response, str) or isinstance(response, unicode):
             api_success = bool("+OK" in response)
