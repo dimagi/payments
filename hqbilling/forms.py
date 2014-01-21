@@ -9,6 +9,8 @@ from hqstyle.forms.widgets import BootstrapRadioSelect, \
     BootstrapAddressField, BootstrapPhoneNumberInput
 from hqbilling.models import (SMSRate, MachSMSRate, TropoSMSRate, UnicelSMSRate, DimagiDomainSMSRate, OUTGOING,
     SMS_DIRECTIONS, INCOMING, DEFAULT_BASE, TaxRateByCountry, BillableCurrency, MACH_BASE_RATE)
+from django.utils.translation import ugettext_lazy
+
 
 DIRECTION_CHOICES = ((OUTGOING, SMS_DIRECTIONS.get(OUTGOING),), (INCOMING, SMS_DIRECTIONS.get(INCOMING),))
 DUPE_CHECK_NEW = "new"
@@ -63,13 +65,17 @@ class DimagiSMSRateForm(SMSRateForm):
 
 class DomainBillingInfoForm(forms.Form):
     currency_code = forms.ChoiceField(choices=[(settings.DEFAULT_CURRENCY, settings.DEFAULT_CURRENCY)])
-    name = forms.CharField(label="Company Name", required=False)
+    name = forms.CharField(label=ugettext_lazy("Company Name"), required=False)
     address = BootstrapAddressField(required=False)
-    city = forms.CharField(label="City", required=False)
-    state_province = forms.CharField(label="State/Province", required=False)
-    postal_code = forms.CharField(label="Postal Code", required=False)
-    country = forms.CharField(label="Country", required=False)
-    phone_number = forms.CharField(widget=BootstrapPhoneNumberInput(), label="Phone Number", required=False)
+    city = forms.CharField(label=ugettext_lazy("City"), required=False)
+    state_province = forms.CharField(label=ugettext_lazy("State/Province"), required=False)
+    postal_code = forms.CharField(label=ugettext_lazy("Postal Code"), required=False)
+    country = forms.CharField(label=ugettext_lazy("Country"), required=False)
+    phone_number = forms.CharField(
+        widget=BootstrapPhoneNumberInput(),
+        label=ugettext_lazy("Phone Number"),
+        required=False
+    )
 
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                initial=None, error_class=ErrorList, label_suffix=':',
@@ -91,8 +97,14 @@ class DomainBillingInfoForm(forms.Form):
 class BillableCurrencyUpdateForm(BaseAdminCRUDForm):
     doc_class = BillableCurrency
 
-    currency_code = forms.CharField(required=True, label="Currency Code (ex: USD)")
-    symbol = forms.CharField(required=False, label="Symbol for currency (ex: $)")
+    currency_code = forms.CharField(
+        required=True,
+        label=ugettext_lazy("Currency Code (ex: USD)")
+    )
+    symbol = forms.CharField(
+        required=False,
+        label=ugettext_lazy("Symbol for currency (ex: $)")
+    )
 
 
 class TaxRateUpdateForm(BaseAdminCRUDForm):
