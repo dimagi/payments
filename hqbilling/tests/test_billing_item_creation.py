@@ -1,8 +1,8 @@
 from django.test import TestCase
 from corehq.apps.domain.models import Domain
-from corehq.apps.sms.mixin import VerifiedNumber, strip_plus
+from corehq.apps.sms.mixin import VerifiedNumber
 from corehq.apps.sms.models import SMSLog
-from corehq.apps.sms.util import clean_phone_number
+from corehq.apps.sms.util import clean_phone_number, strip_plus
 from corehq.apps.users.models import WebUser
 
 from corehq.apps.unicel.api import (UnicelBackend, InboundParams, DATE_FORMAT,
