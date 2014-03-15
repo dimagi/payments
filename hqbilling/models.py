@@ -12,7 +12,7 @@ from django.utils.safestring import mark_safe
 import pytz
 from corehq.apps.crud.models import AdminCRUDDocumentMixin
 from corehq.apps.reports.util import make_form_couch_key
-from corehq.apps.sms.phonenumbers_helper import parse_phone_number
+from corehq.apps.sms.phonenumbers_helper import get_country_code
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db, iter_docs
 from dimagi.utils.dates import add_months
@@ -775,8 +775,8 @@ class TropoSMSBillable(SMSBillable):
     def handle_api_response(cls, message, **kwargs):
         response = kwargs.get("response")
         logging.info("[Billing] Tropo API Response %s" % response)
-        number = parse_phone_number(message.phone_number)
-        rate_item = TropoSMSRate.get_default(direction=message.direction, country_code="%d" % number.country_code)
+        country_code = get_country_code(message.phone_number, failhard=True)
+        rate_item = TropoSMSRate.get_default(direction=message.direction, country_code="%d" % country_code)
         if message.direction == INCOMING:
             billable = cls.new_billable(rate_item, message)
             if billable:
