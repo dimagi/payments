@@ -13,6 +13,7 @@ import pytz
 from corehq.apps.crud.models import AdminCRUDDocumentMixin
 from corehq.apps.reports.util import make_form_couch_key
 from corehq.apps.sms.phonenumbers_helper import get_country_code
+from corehq.apps.sofabed.models import FormData
 from corehq.apps.users.models import CommCareUser
 from dimagi.utils.couch.database import get_db, iter_docs
 from dimagi.utils.dates import add_months
@@ -240,20 +241,17 @@ class HQMonthlyBill(Document):
                 but have submitted things to CommCare HQ during the span of the billing period.
         """
         from corehq.apps.users.models import CommCareUser
-        active_user_ids = [user.user_id for user in CommCareUser.by_domain(self.domain)]
-        inactive_user_ids = [user.user_id for user in CommCareUser.by_domain(self.domain, is_active=False)]
+        active_user_ids = set(CommCareUser.ids_by_domain(self.domain))
+        inactive_user_ids = CommCareUser.ids_by_domain(self.domain, is_active=False)
 
-        key = make_form_couch_key(self.domain)
-        data = get_db().view('reports_forms/all_forms',
-            reduce=False,
-            startkey = key+[self.billing_period_start.isoformat()],
-            endkey = key+[self.billing_period_end.isoformat()]
-        ).all()
-        submitted_user_ids = [item.get('value',{}).get('user_id') for item in data]
-        inactive_submitted_user_ids = list(set([user_id for user_id in submitted_user_ids
-                                                if user_id in inactive_user_ids]))
-        
-        self.active_users = active_user_ids+inactive_submitted_user_ids
+        inactive_submitted_user_ids = set(FormData.object
+            .filter(domain=self.domain)
+            .filter(user_id__in=inactive_user_ids)
+            .distinct('user_id')
+            .values_list('user_id', flat=True)
+        )
+
+        self.active_users = active_user_ids | inactive_submitted_user_ids
 
     def _get_sms_activities(self, direction):
         direction_name = SMS_DIRECTIONS.get(direction).lower()
